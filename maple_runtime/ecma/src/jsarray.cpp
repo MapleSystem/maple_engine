@@ -1291,14 +1291,23 @@ __jsvalue __jsarr_internal_reduce(__jsvalue *this_array, __jsvalue *arg_list, ui
       if (__jsobj_helper_HasPropertyAndGet(o, k, &k_value)) {
         __jsvalue arg_list[4] = { accumulator, k_value, __number_value(k), vo };
         __jsvalue undefined = __undefined_value();
+	// arg_list[0], if a ref-counted object, should have its RC increased before calling __jsfun_internal_call()
+        if (arg_list[0].ptyp == JSTYPE_STRING) // todo: could there be other types that require RC?
+          GCIncRf((void*)arg_list[0].x.u64);
         accumulator = __jsfun_internal_call(func, &undefined, arg_list, 4);
+        if (arg_list[0].ptyp == JSTYPE_STRING) // todo: could there be other types that require RC?
+          GCDecRf((void*)arg_list[0].x.u64);
       }
     } else {
       __jsstring *kstr = __js_DoubleToString(k);
       if (__jsobj_helper_HasPropertyAndGet(o, kstr, &k_value)) {
         __jsvalue arg_list[4] = { accumulator, k_value, __number_value(k), vo };
         __jsvalue undefined = __undefined_value();
+        if (arg_list[0].ptyp == JSTYPE_STRING) // todo: could there be other types that require RC?
+          GCIncRf((void*)arg_list[0].x.u64);
         accumulator = __jsfun_internal_call(func, &undefined, arg_list, 4);
+        if (arg_list[0].ptyp == JSTYPE_STRING) // todo: could there be other types that require RC?
+          GCDecRf((void*)arg_list[0].x.u64);
       }
     }
     k = right_flag ? (k - 1) : (k + 1);
@@ -1460,6 +1469,43 @@ uint32_t __jsarr_getIndex(__jsvalue *p) {
     }
   } else if (__is_double(p)) {
     double d = __jsval_to_double(p);
+    if (d >= MAX_ARRAY_INDEX || d < 0.0) {
+      return MAX_ARRAY_INDEX;
+    } else {
+      return (uint32_t)d;
+    }
+  } else {
+    __jsstring *name = __js_ToString(p);
+    bool convertible = false;
+    uint32_t idx = __jsstr_is_numidx(name, convertible);
+    if (!convertible) {
+      if (!__is_string(p)) {
+        memory_manager->RecallString(name);
+      }
+      return MAX_ARRAY_INDEX;
+    }
+    __jsvalue int_val = __number_value(idx);
+    __jsstring *int_val_str = __js_ToString(&int_val);
+    bool isIndex = __jsstr_equal(name, int_val_str);
+    memory_manager->RecallString(int_val_str);
+    if (!__is_string(p)) {
+      memory_manager->RecallString(name);
+    }
+    if (isIndex) {
+      return idx;
+    }
+  }
+  return MAX_ARRAY_INDEX;
+}
+
+uint32_t __jsarr_getIndex(TValue &p) {
+  if (__is_number(p)) {
+    int32_t idx = __jsval_to_number(p);
+    if (idx >= 0) {
+      return (uint32_t)idx;
+    }
+  } else if (__is_double(p)) {
+    double d = p.x.f64; //__jsval_to_double(p);
     if (d >= MAX_ARRAY_INDEX || d < 0.0) {
       return MAX_ARRAY_INDEX;
     } else {

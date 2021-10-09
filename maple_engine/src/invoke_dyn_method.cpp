@@ -549,11 +549,40 @@ extern "C" uint32_t __inc_opcode_cnt_dyn() {
     }\
   }
 
+#define PROP_CACHE_SIZE 64
 struct prop_cache {
+  uint64_t g;
   void *o;
   void *p;
   __jsvalue ret;
-} named_prop_cache[2] = {{.o = 0}};
+} prop_cache[PROP_CACHE_SIZE] = {{.g = 0}};
+uint64_t prop_cache_gen = 1;
+#define PROP_CACHE_HASH(obj, name)   (((obj.x.u32 >> 3) ^ name.x.u32) & (PROP_CACHE_SIZE - 1))
+#define PROP_CACHE_RESET(obj, name)  (prop_cache[PROP_CACHE_HASH(obj, name)].o = 0)
+#define PROP_CACHE_INVALIDATE   prop_cache_gen++
+#define PROP_CACHE_SET(obj, name, r) { \
+  int ci = PROP_CACHE_HASH(obj, name); \
+  prop_cache[ci].g = prop_cache_gen; \
+  prop_cache[ci].o = obj.x.a64; \
+  prop_cache[ci].p = name.x.a64; \
+  prop_cache[ci].ret = r; \
+}
+inline bool PROP_CACHE_GET(TValue &obj, TValue &name, MValue &r) {
+  int ci = PROP_CACHE_HASH(obj, name);
+  if (prop_cache_gen == prop_cache[ci].g && prop_cache[ci].o == obj.x.a64 && prop_cache[ci].p == name.x.a64) {
+    r = prop_cache[ci].ret;
+    return true;
+  }
+  return false;
+}
+inline bool PROP_CACHE_GET(MValue &obj, TValue &name, MValue &r) {
+  int ci = PROP_CACHE_HASH(obj, name);
+  if (prop_cache_gen == prop_cache[ci].g && prop_cache[ci].o == obj.x.a64 && prop_cache[ci].p == name.x.a64) {
+    r = prop_cache[ci].ret;
+    return true;
+  }
+  return false;
+}
 
 MValue InvokeInterpretMethod(DynMFunction &func) {
     uint8_t *frame_pointer = (uint8_t *)gInterSource->GetFPAddr();
@@ -1930,13 +1959,13 @@ label_OP_intrinsiccall:
       __jsstring *v1 = (__jsstring *)(v0.x.u64 & PAYLOAD_MASK);
       __jsvalue &v = __js_Global_ThisBinding;
       __jsop_init_this_prop_by_name(&v, v1);
+      PROP_CACHE_INVALIDATE;
       break;
     }
     case INTRN_JSOP_SET_THIS_PROP_BY_NAME:{
       MIR_ASSERT(argnums == 2);
       TValue &arg1 = MPOP();
       TValue &arg0 = MPOP();
-      named_prop_cache[1].o = 0; // invalidate cache
       CHECKREFERENCEMVALUE(arg1);
       MValue arg1_ = TValue2MValue(arg1);
       try {
@@ -1948,6 +1977,7 @@ label_OP_intrinsiccall:
           MAPLE_JS_TYPEERROR_EXCEPTION();
         }
         __jsop_set_this_prop_by_name(&v0, v1, &arg1_, true);
+        PROP_CACHE_RESET(v0, arg0);
       }
       CATCHINTRINSICOP();
       break;
@@ -1957,7 +1987,6 @@ label_OP_intrinsiccall:
       TValue &v2 = MPOP();
       TValue &v1 = MPOP();
       TValue &v0 = MPOP();
-      named_prop_cache[0].o = 0; // invalidate cache
       CHECKREFERENCEMVALUE(v0);
       MValue v2_ = TValue2MValue(v2);
       MValue v0_ = TValue2MValue(v0);
@@ -1968,6 +1997,7 @@ label_OP_intrinsiccall:
           MAPLE_JS_TYPEERROR_EXCEPTION();
         }
         __jsop_setprop_by_name(&v0_, s1, &v2_, is_strict);
+        PROP_CACHE_RESET(v0, v1);
       }
       CATCHINTRINSICOP();
       break;
@@ -1977,10 +2007,8 @@ label_OP_intrinsiccall:
       TValue &v1 = MPOP();
       TValue &v0 = MPOP();
       CHECKREFERENCEMVALUE(v0);
-      MValue v1_ = TValue2MValue(v1);
-      MValue v0_ = TValue2MValue(v0);
       try {
-        MValue retMv = __jsop_getprop(&v0_, &v1_);
+        MValue retMv = __jsop_getprop(v0, v1);
         SetRetval0(retMv);
       }
       CATCHINTRINSICOP();
@@ -1990,20 +2018,18 @@ label_OP_intrinsiccall:
       MIR_ASSERT(argnums == 2);
       TValue &v1 = MPOP();
       TValue &v0 = MPOP();
-      if (named_prop_cache[0].o == v0.x.a64 && named_prop_cache[0].p == v1.x.a64) {
-        SetRetval0(named_prop_cache[0].ret);;
+      MValue retMv;
+      if (PROP_CACHE_GET(v0, v1, retMv)) {
+        SetRetval0(retMv);
         break;
       }
       CHECKREFERENCEMVALUE(v0);
       MValue v1_ = TValue2MValue(v1);
       MValue v0_ = TValue2MValue(v0);
       try {
-        MValue retMv = gInterSource->JSopGetPropByName(v0_, v1_);
+        retMv = gInterSource->JSopGetPropByName(v0_, v1_);
         SetRetval0(retMv);
-
-        named_prop_cache[0].o = v0.x.a64;
-        named_prop_cache[0].p = v1.x.a64;
-        named_prop_cache[0].ret = retMv;
+        PROP_CACHE_SET(v0, v1, retMv);
       }
       CATCHINTRINSICOP();
       break;
@@ -2018,8 +2044,7 @@ label_OP_intrinsiccall:
       try {
         MValue retMv = gInterSource->JSopDelProp(v0_, v1_, is_strict);
         SetRetval0(retMv);
-        named_prop_cache[0].o = 0; // invalidate cache
-        named_prop_cache[1].o = 0; // invalidate cache
+        PROP_CACHE_INVALIDATE;
       }
       CATCHINTRINSICOP();
       break;
@@ -2033,9 +2058,8 @@ label_OP_intrinsiccall:
       MValue v0_ = TValue2MValue(v0);
       try {
         MValue retMv = gInterSource->JSopDelProp(v0_, v1_, is_strict);
+        PROP_CACHE_INVALIDATE;
         SetRetval0(retMv);
-        named_prop_cache[0].o = 0; // invalidate cache
-        named_prop_cache[1].o = 0; // invalidate cache
       }
       CATCHINTRINSICOP();
       break;
@@ -2048,6 +2072,7 @@ label_OP_intrinsiccall:
       MValue v1_ = TValue2MValue(v1);
       MValue v0_ = TValue2MValue(v0);
       __jsop_initprop(&v0_, &v1_, &v2_);
+      PROP_CACHE_INVALIDATE;
       break;
     }
     case INTRN_JSOP_INITPROP_BY_NAME: {
@@ -2059,6 +2084,7 @@ label_OP_intrinsiccall:
       MValue v1_ = TValue2MValue(v1);
       MValue v0_ = TValue2MValue(v0);
       gInterSource->JSopInitPropByName(v0_, v1_, v2_);
+      PROP_CACHE_INVALIDATE;
       break;
     }
     case INTRN_JSOP_INITPROP_GETTER: {
@@ -2228,10 +2254,7 @@ label_OP_intrinsiccall:
         TValue &v2 = MPOP();
         TValue &v1 = MPOP();
         TValue &v0 = MPOP();
-        MValue v2_ = TValue2MValue(v2);
-        MValue v1_ = TValue2MValue(v1);
-        MValue v0_ = TValue2MValue(v0);
-        __jsop_setprop(&v0_, &v1_, &v2_);
+        __jsop_setprop(v0, v1, v2);
         break;
       }
       case INTRN_JSOP_NEW_ITERATOR: {
@@ -2833,19 +2856,11 @@ label_OP_intrinsicop:
          case INTRN_JSOP_GET_THIS_PROP_BY_NAME: {
            MIR_ASSERT(argnums == 1);
            TValue &v0 = MPOP();
-
-           if (named_prop_cache[1].o == __js_Global_ThisBinding.x.a64 && named_prop_cache[1].p == v0.x.a64) {
-             retMv = named_prop_cache[1].ret;
+           if (PROP_CACHE_GET(__js_Global_ThisBinding, v0, retMv))
              break;
-           }
-
            MValue v0_ = TValue2MValue(v0);
            retMv = gInterSource->JSopGetThisPropByName(v0_);
-
-           named_prop_cache[1].o = __js_Global_ThisBinding.x.a64;
-           named_prop_cache[1].p = v0.x.a64;
-           named_prop_cache[1].ret = retMv;
-
+           PROP_CACHE_SET(__js_Global_ThisBinding, v0, retMv);
            break;
          }
          case INTRN_JSOP_GETPROP: {
@@ -2947,13 +2962,21 @@ label_OP_iassignfpoff:
     uint8 *addr = frame_pointer + offset;
 
     uint64_t oldV = *((uint64_t*)addr);
-    if (IS_NEEDRC(rVal.x.u64)) {
-      GCIncRf((void *)(rVal.x.u64));
+#ifdef RC_OPT_IASSIGNFPOFF
+    if (IS_NEEDRC(rVal.x.u64) && rVal.x.u64 == oldV) {
+      // do nothing
     }
-    if (IS_NEEDRC(oldV)) {
-      GCDecRf((void *)(oldV & PAYLOAD_MASK));
+    else
+#endif
+    {
+      if (IS_NEEDRC(rVal.x.u64)) {
+        GCIncRf((void *)(rVal.x.u64));
+      }
+      if (IS_NEEDRC(oldV)) {
+        GCDecRf((void *)(oldV & PAYLOAD_MASK));
+      }
+      *(uint64_t *)addr = rVal.x.u64;
     }
-    *(uint64_t *)addr = rVal.x.u64;
 
     if (!is_strict && offset > 0 && DynMFunction::is_jsargument(func.header)) {
       MValue rVal_ = TValue2MValue(rVal);

@@ -93,6 +93,23 @@ __jsvalue __js_new_str_obj(__jsvalue *this_object, __jsvalue *arg_list, uint32_t
   return __object_value(obj);
 }
 
+TValue __js_new_str_obj(TValue &arg) {
+  __jsobject *obj = __create_object();
+  __jsobj_set_prototype(obj, JSBUILTIN_STRINGPROTOTYPE);
+  obj->object_class = JSSTRING;
+  obj->extensible = true;
+
+  __jsstring *primstring;
+  primstring = __js_ToString(arg);
+  obj->shared.prim_string = primstring;
+  GCIncRf(primstring);
+  __jsvalue length_value = __number_value(__jsstr_get_length(primstring));
+  __jsobj_helper_init_value_property(obj, JSBUILTIN_STRING_LENGTH, &length_value, JSPROP_DESC_HAS_VUWUEUC);
+  // call __jsobj_initprop_fromString only when needed for performance
+  //  __jsobj_initprop_fromString(obj, obj->shared.prim_string);
+  return __object_TValue(obj);
+}
+
 // 15.1.4.5 Boolean ( . . . ), See 15.6.1 and 15.6.2.
 // ecma 15.6.2
 __jsvalue __js_new_boo_obj(__jsvalue *this_object, __jsvalue *arg_list, uint32_t nargs) {
@@ -107,6 +124,14 @@ __jsvalue __js_new_boo_obj(__jsvalue *this_object, __jsvalue *arg_list, uint32_t
     obj->shared.prim_bool = __js_ToBoolean(arg_list);
   }
   return __object_value(obj);
+}
+TValue __js_new_boo_obj(TValue &arg) {
+  __jsobject *obj = __create_object();
+  __jsobj_set_prototype(obj, JSBUILTIN_BOOLEANPROTOTYPE);
+  obj->object_class = JSBOOLEAN;
+  obj->extensible = true;
+  obj->shared.prim_bool = __js_ToBoolean(arg);
+  return __object_TValue(obj);
 }
 
 // 15.1.4.6 Number ( . . . ), See 15.7.1 and 15.7.2.
@@ -143,6 +168,34 @@ __jsvalue __js_new_num_obj(__jsvalue *this_object, __jsvalue *arg_list, uint32_t
       obj->shared.primDouble = __jsval_to_double(arg_list);
   }
   return __object_value(obj);
+}
+
+TValue __js_new_num_obj(TValue &arg) {
+  if ((__is_nan_t(arg)) || (__is_infinity_t(arg))) {
+    __jsobject *obj = __create_object();
+    __jsobj_set_prototype(obj, JSBUILTIN_NUMBERPROTOTYPE);
+    obj->object_class = JSNUMBER;
+    obj->object_type = JSSPECIAL_NUMBER_OBJECT;
+    obj->extensible = true;
+    __jsstring *primstring;
+    primstring = __js_ToString(arg);
+    obj->shared.prim_string = primstring;
+    GCIncRf(primstring);
+    __jsvalue length_value = __number_value(__jsstr_get_length(primstring));
+    __jsobj_helper_init_value_property(obj, JSBUILTIN_STRING_LENGTH, &length_value, JSPROP_DESC_HAS_VUWUEUC);
+    return __object_TValue(obj);
+  }
+
+  bool isDouble = __is_double(arg);
+  __jsobject *obj = __create_object();
+  __jsobj_set_prototype(obj, JSBUILTIN_NUMBERPROTOTYPE);
+  obj->object_class = isDouble ? JSDOUBLE : JSNUMBER;
+  obj->extensible = true;
+  if (!isDouble)
+    obj->shared.prim_number = __js_ToNumber(arg);
+  else
+    obj->shared.primDouble = __jsval_to_double(arg);
+  return __object_TValue(obj);
 }
 
 

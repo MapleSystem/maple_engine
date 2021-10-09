@@ -170,7 +170,8 @@ int32_t InterSource::PassArguments(MValue this_arg, void *env, MValue *arg_list,
     offset -= MVALSIZE;
     ALIGNMENTNEGOFFSET(offset, MVALSIZE);
     EmulateStore(spaddr + offset, actual);
-#if 0 // RC is increased for args and decreased after the func call, therefore, the pair of RC ops can be eliminated.
+#ifndef RC_OPT_FUNC_ARGS
+    // RC is increased for args and decreased after the func call, therefore, the pair of RC ops can be eliminated.
     if (IsNeedRc(actual.ptyp)) {
        GCIncRf((void*)(actual.x.u64 & PAYLOAD_MASK));
     }
@@ -190,11 +191,14 @@ int32_t InterSource::PassArguments(MValue this_arg, void *env, MValue *arg_list,
     // SetMValueValue(envMal, memory_manager->MapRealAddr(env));
     // SetMValueTag(envMal, JSTYPE_ENV);
     EmulateStore(spaddr + offset + MVALSIZE, envMal);
-    // GCCheckAndIncRf(envMal.x.u64, true);
+#ifndef RC_OPT_FUNC_ARGS
+    GCCheckAndIncRf(envMal.x.u64, true);
+#endif
   }
   // Pass the 'this'.
   EmulateStore(spaddr + offset, this_arg);
-#if 0 // RC is increased for args and decreased after the func call, therefore, the pair of RC ops can be eliminated.
+#ifndef RC_OPT_FUNC_ARGS
+ // RC is increased for args and decreased after the func call, therefore, the pair of RC ops can be eliminated.
   if (IsNeedRc(this_arg.ptyp))
     GCIncRf((void*)this_arg.x.u64);
 #endif
@@ -2131,8 +2135,11 @@ MValue InterSource::FuncCall(void *callee, bool isIntrinsiccall, void *env, MVal
   uint8 *frameEnd = spaddr + offset;  // offset is negative
   uint8 *addr = frameEnd - calleeHeader->frameSize;
   // frame: between addr and frameEnd; args: between frameEnd and spaddr
-  // while(addr < spaddr) {
+#ifdef RC_OPT_FUNC_ARGS
   while(addr < frameEnd) {
+#else
+  while(addr < spaddr) {
+#endif
     void *local = *(void**)addr;
     if (IS_NEEDRC(local)) {
       GCDecRf(local);
@@ -2187,8 +2194,11 @@ MValue InterSource::FuncCall_JS(__jsobject *fObject, __jsvalue *this_arg, void *
   uint8 *frameEnd = spaddr + offset;  // offset is negative
   uint8 *addr = frameEnd - calleeHeader->frameSize;
   // frame: between addr and frameEnd; args: between frameEnd and spaddr
-  // while(addr < spaddr) {
+#ifdef RC_OPT_FUNC_ARGS
   while(addr < frameEnd) {
+#else
+  while(addr < spaddr) {
+#endif
     void **local = (void**)addr;
     if (IS_NEEDRC(*local)) {
       GCDecRf(*local);

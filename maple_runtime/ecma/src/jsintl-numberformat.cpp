@@ -14,6 +14,8 @@
  */
 
 #include <unicode/numsys.h>
+#include <unicode/unum.h>
+#include <unicode/ustring.h>
 #include "jsvalueinline.h"
 #include "jsvalue.h"
 #include "jsobject.h"
@@ -232,7 +234,6 @@ void InitializeNumberFormat(__jsvalue *this_number_format, __jsvalue *locales,
   fallback = __number_value(1);
   __jsvalue mnid = GetNumberOption(options, &prop, &minimum, &maximum, &fallback);
   // Step 24.
-  prop = StrToVal("minimumIntegerDigits");
   __jsop_setprop(this_number_format, &prop, &mnid);
   // Step 25.
   __jsvalue mnfd_default;
@@ -248,7 +249,6 @@ void InitializeNumberFormat(__jsvalue *this_number_format, __jsvalue *locales,
   fallback = mnfd_default;
   __jsvalue mnfd = GetNumberOption(options, &prop, &minimum, &maximum, &fallback);
   // Step 27.
-  prop = StrToVal("minimumFractionDigits");
   __jsop_setprop(this_number_format, &prop, &mnfd);
   // Step 28.
   __jsvalue mxfd_default;
@@ -322,7 +322,7 @@ void InitializeNumberFormat(__jsvalue *this_number_format, __jsvalue *locales,
   }
 #if 0
   // Step 38.
-  MAPLE_JS_ASSERT(__is_js_object(&patterns)); // TODO: not checked yet.
+  MAPLE_JS_ASSERT(__is_js_object(&patterns));
   // initial Intl.NumberFormat, locale_data, patterns not set.
   // Step 39.
   prop = s;
@@ -400,6 +400,7 @@ __jsvalue __jsintl_NumberFormatSupportedLocalesOf(__jsvalue *number_format,
 // returns a String value representing x according to the effective locale and the formatting options
 // of numberFormat.
 __jsvalue FormatNumber(__jsvalue *number_format, __jsvalue *x_val) {
+#if 0
   if (__is_boolean(x_val)) {
     *x_val = __number_value(__jsval_to_number(x_val));
   }
@@ -573,6 +574,171 @@ __jsvalue FormatNumber(__jsvalue *number_format, __jsvalue *x_val) {
 
   }
   // Step 7.
+  return result;
+#endif
+
+  // Implelementation using ICU.
+
+  // UNumberFormat options.
+  UNumberFormatStyle u_style = UNUM_DECIMAL;
+  const UChar *u_currency = nullptr;
+  uint32_t u_minimum_integer_digits = 1;
+  uint32_t u_minimum_fraction_digits = 0;
+  uint32_t u_maximum_fraction_digits = 3;
+  int32_t u_minimum_significant_digits = -1;
+  int32_t u_maximum_significant_digits = -1;
+  bool u_use_grouping = true;
+
+  __jsvalue p = StrToVal("style");
+  __jsvalue v = __jsop_getprop(number_format, &p);
+  std::string style = ValToStr(&v);
+  __jsvalue v_style = v;
+
+  if (style == "currency") {
+    p = StrToVal("currency");
+    v = __jsop_getprop(number_format, &p);
+    std::string currency = ValToStr(&v);
+    MAPLE_JS_ASSERT(currency.length() == 3 && "currency length is not 3");
+
+    u_currency = (UChar*)currency.c_str();
+    if (u_currency == nullptr) {
+      MAPLE_JS_ASSERT(false && "u_currency is null");
+    }
+
+    p = StrToVal("currencyDisplay");
+    v = __jsop_getprop(number_format, &p);
+    std::string currency_display = ValToStr(&v);
+    if (currency_display == nullptr) {
+      MAPLE_JS_ASSERT(false && "currency_display is null");
+    }
+
+    if (currency_display == "code") {
+      u_style = UNUM_CURRENCY_ISO;
+    } else if (currency_display == "symbol") {
+      u_style = UNUM_CURRENCY;
+    } else if (currency_display == "name") {
+      u_style = UNUM_CURRENCY_PLURAL;
+    } else {
+      MAPLE_JS_ASSERT(false && "wrong currency_display");
+    }
+  } else if (style == "percent") {
+    u_style = UNUM_PERCENT;
+  } else {
+    u_style = UNUM_DECIMAL;
+  }
+
+  p = StrToVal("minimumSignificantDigits");
+  v = __jsop_getprop(number_format, &p);
+  if (!__is_undefined(&v))
+    u_minimum_significant_digits = (int32_t) __jsval_to_number(&v);
+
+  p = StrToVal("maximumSignificantDigits");
+  v = __jsop_getprop(number_format, &p);
+  if (!__is_undefined(&v))
+    u_maximum_significant_digits = (int32_t) __jsval_to_number(&v);
+
+  p = StrToVal("minimumIntegerDigits");
+  v = __jsop_getprop(number_format, &p);
+  if (!__is_undefined(&v))
+    u_minimum_integer_digits = (int32_t) __jsval_to_number(&v);
+
+  p = StrToVal("minimumFractionDigits");
+  v = __jsop_getprop(number_format, &p);
+  if (!__is_undefined(&v))
+    u_minimum_fraction_digits = (int32_t) __jsval_to_number(&v);
+
+  p = StrToVal("maximumFractionDigits");
+  v = __jsop_getprop(number_format, &p);
+  if (!__is_undefined(&v))
+    u_maximum_fraction_digits = (int32_t) __jsval_to_number(&v);
+
+  p = StrToVal("useGrouping");
+  v = __jsop_getprop(number_format, &p);
+  u_use_grouping = __jsval_to_boolean(&v);
+
+  p = StrToVal("locale");
+  v = __jsop_getprop(number_format, &p);
+  std::string locale = ValToStr(&v);
+
+  UErrorCode status = U_ZERO_ERROR;
+  UNumberFormat *nf;
+  if (locale == "und") {
+    nf = unum_open(u_style, nullptr, 0, "", nullptr, &status);
+  } else {
+    nf = unum_open(u_style, nullptr, 0, ToICULocale(locale), nullptr, &status);
+  }
+  if (U_FAILURE(status)) {
+    MAPLE_JS_ASSERT(false && "Error in unum_open()");
+  }
+
+  if (u_currency) {
+    unum_setTextAttribute(nf, UNUM_CURRENCY_CODE, u_currency, 3, &status);
+    if (U_FAILURE(status)) {
+      MAPLE_JS_ASSERT(false && "Error in unum_setTextAttribute()");
+    }
+  }
+
+  if (u_minimum_significant_digits != -1) {
+    unum_setAttribute(nf, UNUM_SIGNIFICANT_DIGITS_USED, true);
+    unum_setAttribute(nf, UNUM_MIN_SIGNIFICANT_DIGITS, u_minimum_significant_digits);
+    unum_setAttribute(nf, UNUM_MAX_SIGNIFICANT_DIGITS, u_maximum_significant_digits);
+  } else {
+    unum_setAttribute(nf, UNUM_MIN_INTEGER_DIGITS, u_minimum_integer_digits);
+    unum_setAttribute(nf, UNUM_MIN_FRACTION_DIGITS, u_minimum_fraction_digits);
+    unum_setAttribute(nf, UNUM_MAX_FRACTION_DIGITS, u_maximum_fraction_digits);
+  }
+
+  unum_setAttribute(nf, UNUM_GROUPING_USED, u_use_grouping);
+  unum_setAttribute(nf, UNUM_ROUNDING_MODE, UNUM_ROUND_HALFUP);
+
+  double x;
+  if (__is_js_object(x_val)) {
+    __jsobject *obj = x_val->x.obj;
+    if (obj->object_class == JSNUMBER) {
+      x = (double) obj->shared.prim_number;
+    } else if (obj->object_class == JSDOUBLE) {
+      x = obj->shared.primDouble;
+    } else if (obj->object_class == JSOBJECT) {
+      bool is_convertible = true;
+      __jsvalue double_val = __js_ToNumberSlow2(x_val, is_convertible);
+      x = __jsval_to_double(&double_val);
+    } else {
+      MAPLE_JS_ASSERT(false && "NIY");
+    }
+  } else if (__is_string(x_val)) {
+    bool is_num;
+    __jsvalue double_val = __js_str2double(__jsval_to_string(x_val), is_num);
+    x = __jsval_to_double(&double_val);
+  } else if (__is_boolean(x_val)) {
+    x = (__jsval_to_boolean(x_val) == TRUE) ? 1.0 : 0.0;
+  } else if (__is_negative_zero(x_val)) {
+    x = 0.0;
+  } else {
+    x = __jsval_to_double(x_val);
+  }
+
+  UChar *chars = (UChar*)VMMallocGC(sizeof(UChar)*(INITIAL_STRING_BUFFER_SIZE));
+  status = U_ZERO_ERROR;
+  int size = unum_formatDouble(nf, x, chars, INITIAL_STRING_BUFFER_SIZE, nullptr, &status);
+  if (status == U_BUFFER_OVERFLOW_ERROR) {
+    VMReallocGC(chars, sizeof(UChar)*(INITIAL_STRING_BUFFER_SIZE), sizeof(UChar)*(size));
+    status = U_ZERO_ERROR;
+    unum_formatDouble(nf, x, chars, size, nullptr, &status);
+  }
+  if (U_FAILURE(status)) {
+    MAPLE_JS_ASSERT(false && "Error in unum_formatDouble()");
+  }
+  char *res = (char*)VMMallocGC(sizeof(char)*(INITIAL_STRING_BUFFER_SIZE*2));
+  u_austrcpy(res, chars);
+  std::string res_str(res);
+  // Handle negative zero (JSI9426).
+  if (__is_negative_zero(x_val)) {
+    res_str = "-" + res_str;
+  }
+  __jsvalue result = StrToVal(res_str);
+
+  unum_close(nf);
+
   return result;
 }
 
@@ -783,6 +949,9 @@ void InitializeNumberFormatProperties(__jsvalue *number_format, __jsvalue *local
         // locale should be includled in available_locales.
         __jsvalue available_locales = GetAvailableLocales();
         p = BestAvailableLocale(&available_locales, &p);
+        if (__is_undefined(&p)) {
+          p = DefaultLocale();
+        }
         __jsop_setprop(&locale_data, &p, &locale); // Set locale to localeData.
       }
       if (size == 0) { // when locale is not specified, use default one.

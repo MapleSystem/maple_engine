@@ -135,8 +135,12 @@ void InitializeCollator(__jsvalue *this_collator, __jsvalue *locales,
   values = __undefined_value();
   fallback = __undefined_value();
   __jsvalue value = GetOption(options, &property, &type, &values, &fallback);
+  // Step 13c.
+  // If the string given in the Type colun of the row is "boolean" and 'value' is not undefined, then
+  // Step 13c i.
+  // Let 'value' to be ToString(value).
   if (!__is_undefined(&value)) {
-    value = __string_value(__jsval_to_string(&value));
+    value = __string_value(__js_ToStringSlow(&value));
   }
   __jsop_setprop(&opt, &key, &value);
 
@@ -492,6 +496,9 @@ void InitializeCollatorProperties(__jsvalue *collator, __jsvalue *locales, std::
         p = __jsarr_GetElem(locales_object, j);
         __jsvalue available_locales = GetAvailableLocales();
         p = BestAvailableLocale(&available_locales, &p);
+        if (__is_undefined(&p)) {
+          p = DefaultLocale();
+        }
         __jsop_setprop(&sort_locale_data, &p, &locale);
       }
       if (size == 0) {
@@ -532,6 +539,9 @@ void InitializeCollatorProperties(__jsvalue *collator, __jsvalue *locales, std::
         p = __jsarr_GetElem(locales_object, j);
         __jsvalue available_locales = GetAvailableLocales();
         p = BestAvailableLocale(&available_locales, &p);
+        if (__is_undefined(&p)) {
+          p = DefaultLocale();
+        }
         __jsop_setprop(&search_locale_data, &p, &locale);
       }
       if (size == 0) {

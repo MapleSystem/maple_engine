@@ -25,14 +25,17 @@ __jsvalue __js_new_obj(__jsvalue *, __jsvalue *, uint32_t);
 __jsvalue __js_new_arr(__jsvalue *, __jsvalue *, uint32_t);
 // ecma 15.5.2
 __jsvalue __js_new_str_obj(__jsvalue *, __jsvalue *, uint32_t);
+maple::TValue __js_new_str_obj(maple::TValue &);
 // 15.1.4.5 Boolean ( . . . ), See 15.6.1 and 15.6.2.
 // For 15.6.1 Use __js_ToBoolean instead.
 // ecma 15.6.2
 __jsvalue __js_new_boo_obj(__jsvalue *, __jsvalue *, uint32_t );
+maple::TValue __js_new_boo_obj(maple::TValue &);
 // 15.1.4.6 Number ( . . . ), See 15.7.1 and 15.7.2.
 // ecma 15.7.1  Use __js_ToNumer instead.
 // ecma 15.7.2.
 __jsvalue __js_new_num_obj(__jsvalue *, __jsvalue *, uint32_t);
+maple::TValue __js_new_num_obj(maple::TValue &);
 // 15.3.4 Properties of the Function Prototype Object.
 __jsvalue __js_empty(__jsvalue *, __jsvalue *, uint32_t);
 __jsvalue __js_isnan(__jsvalue *, __jsvalue *, uint32_t);

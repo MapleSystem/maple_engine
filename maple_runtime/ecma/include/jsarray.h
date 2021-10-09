@@ -43,6 +43,7 @@ void __jsarr_internal_DefineLengthProperty(__jsobject *a, __jsprop_desc desc, bo
 void __jsarr_internal_DefineElemProperty(__jsobject *a, uint32_t index, __jsprop_desc desc, bool throw_p);
 // __jsarr_getIndex(p) returns MAX_ARRAY_INDEX if p is not an index
 uint32_t __jsarr_getIndex(__jsvalue *p);
+uint32_t __jsarr_getIndex(maple::TValue &p);
 
 void __jsarr_internal_MoveElem(__jsobject *arr, uint32_t to_idx, uint32_t from_idx);
 

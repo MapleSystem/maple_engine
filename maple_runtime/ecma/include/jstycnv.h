@@ -22,6 +22,7 @@ __jsvalue __js_ToPrimitive(__jsvalue *v, __jstype preferred_type);
 __jsvalue __js_ToPrimitive2(__jsvalue *v); // difference is when v is an object, it will look if it's jsnumber or JSBOOLEAN or JSDOUBLE object
 // ecma 9.2
 bool __js_ToBoolean(__jsvalue *v);
+bool __js_ToBoolean(maple::TValue &v);
 // ecma 9.3~9.4
 int32_t __js_ToNumberSlow(__jsvalue *v);
 int64_t __js_ToNumberSlow64(__jsvalue *v);
@@ -30,6 +31,14 @@ static inline int32_t __js_ToNumber(__jsvalue *v) {
     return __jsval_to_number(v);
   }
   return __js_ToNumberSlow(v);
+}
+
+static inline int32_t __js_ToNumber(maple::TValue &v) {
+  if (__is_number(v)) {
+    return __jsval_to_number(v);
+  }
+  maple::MValue mv = TValue2MValue(v);
+  return __js_ToNumberSlow(&mv);
 }
 
 static inline int64_t __js_ToNumber64(__jsvalue *v) {
@@ -75,6 +84,22 @@ static inline uint32_t __js_ToUint32(__jsvalue *v) {
   return 0;
 }
 
+static inline uint32_t __js_ToUint32(maple::TValue &v) {
+  if (__is_number(v)) {
+    return (uint32_t)__jsval_to_number(v);
+  }
+  bool convertible = false;
+  maple::MValue mv = TValue2MValue(v);
+  __jsvalue numval = __js_ToNumber2(&mv, convertible);
+  if (__is_double(v) || __is_double(&numval)) {
+    double d = __is_double(v) ? __jsval_to_double(v) : __jsval_to_double(&numval);
+    return (uint32_t)(d);
+  } else if (__is_number(&numval)) {
+    return (uint32_t)(__jsval_to_number(&numval));
+  }
+  return 0;
+}
+
 // ecma 9.7
 static inline uint16_t __js_ToUint16(__jsvalue *v) {
   return (uint16_t)__js_ToNumber(v);
@@ -90,8 +115,17 @@ static inline __jsstring *__js_ToString(__jsvalue *v) {
   return __js_ToStringSlow(v);
 }
 
+static inline __jsstring *__js_ToString(maple::TValue &v) {
+  if (__is_string(v)) {
+    return __jsval_to_string(v);
+  }
+  __jsvalue mv = TValue2MValue(v);
+  return __js_ToStringSlow(&mv);
+}
+
 // ecma 9.9
 __jsobject *__js_ToObject(__jsvalue *v);
+__jsobject *__js_ToObject(maple::TValue &v);
 // ecma 9.10
 static inline void CheckObjectCoercible(__jsvalue *v) {
   if (__is_null_or_undefined(v)) {

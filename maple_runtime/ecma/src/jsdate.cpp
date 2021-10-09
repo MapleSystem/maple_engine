@@ -523,6 +523,15 @@ __jsvalue __jsdate_ToDateString(__jsvalue *this_date) {
 
 // ES5 15.9.5.6 Date.prototype.toLocaleDateString()
 __jsvalue __jsdate_ToLocaleDateString(__jsvalue *this_date, __jsvalue *arg_list, uint32_t nargs) {
+
+  // Check this_date.
+  if (__is_undefined(this_date) || __is_null(this_date) || !__is_js_object(this_date)) {
+    MAPLE_JS_TYPEERROR_EXCEPTION();
+  }
+  if (__jsval_to_object(this_date)->object_class != JSDATE) {
+    MAPLE_JS_TYPEERROR_EXCEPTION();
+  }
+
   __jsvalue locales, options;
 
   if (nargs == 1) {
@@ -546,10 +555,6 @@ __jsvalue __jsdate_ToLocaleDateString(__jsvalue *this_date, __jsvalue *arg_list,
     options = __undefined_value();
   }
 
-  // Check if 'locales' is undefined.
-  if (__is_undefined(&locales)) {
-    MAPLE_JS_TYPEERROR_EXCEPTION();
-  }
   // Check if 'locales' is valid (JSI9502).
   locales = CanonicalizeLocaleList(&locales);
 
@@ -580,6 +585,15 @@ __jsvalue __jsdate_ToLocaleDateString(__jsvalue *this_date, __jsvalue *arg_list,
 // ES5 15.9.5.5 Date.prototype.toLocaleString()
 // ECMA-402 13.3.1 Date.prototype.toLocaleString([locales [, options]])
 __jsvalue __jsdate_ToLocaleString(__jsvalue *this_date, __jsvalue *arg_list, uint32_t nargs) {
+
+  // Check this_date.
+  if (__is_undefined(this_date) || __is_null(this_date) || !__is_js_object(this_date)) {
+    MAPLE_JS_TYPEERROR_EXCEPTION();
+  }
+  if (__jsval_to_object(this_date)->object_class != JSDATE) {
+    MAPLE_JS_TYPEERROR_EXCEPTION();
+  }
+
   __jsvalue locales, options;
 
   if (nargs == 1) {
@@ -603,10 +617,6 @@ __jsvalue __jsdate_ToLocaleString(__jsvalue *this_date, __jsvalue *arg_list, uin
     options = __undefined_value();
   }
 
-  // Check if 'locales' is undefined.
-  if (__is_undefined(&locales)) {
-    MAPLE_JS_TYPEERROR_EXCEPTION();
-  }
   // Check if 'locales' is valid (JSI9502).
   locales = CanonicalizeLocaleList(&locales);
 
@@ -634,6 +644,15 @@ __jsvalue __jsdate_ToLocaleString(__jsvalue *this_date, __jsvalue *arg_list, uin
 
 // ES5 15.9.5.7 Date.prototype.toLocaleTimeString()
 __jsvalue __jsdate_ToLocaleTimeString(__jsvalue *this_date, __jsvalue *arg_list, uint32_t nargs) {
+
+  // Check this_date.
+  if (__is_undefined(this_date) || __is_null(this_date) || !__is_js_object(this_date)) {
+    MAPLE_JS_TYPEERROR_EXCEPTION();
+  }
+  if (__jsval_to_object(this_date)->object_class != JSDATE) {
+    MAPLE_JS_TYPEERROR_EXCEPTION();
+  }
+
   __jsvalue locales, options;
 
   if (nargs == 1) {
@@ -657,10 +676,6 @@ __jsvalue __jsdate_ToLocaleTimeString(__jsvalue *this_date, __jsvalue *arg_list,
     options = __undefined_value();
   }
  
-  // Check if 'locales' is undefined.
-  if (__is_undefined(&locales)) {
-    MAPLE_JS_TYPEERROR_EXCEPTION();
-  }
   // Check if 'locales' is valid (JSI9502).
   locales = CanonicalizeLocaleList(&locales);
 

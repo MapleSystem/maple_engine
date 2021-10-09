@@ -22,6 +22,8 @@
 #include "jsvalue.h"
 #include "jsstring.h"
 
+static const size_t INITIAL_STRING_BUFFER_SIZE = 32;
+
 // Helper
 __jsvalue StrToVal(std::string str);
 __jsvalue StrVecToVal(std::vector<std::string> strs);
@@ -63,6 +65,7 @@ __jsvalue GetNumberOption(__jsvalue *options, __jsvalue *property,
 __jsvalue DefaultLocale();
 __jsvalue GetAvailableLocales();
 std::vector<std::string> GetNumberingSystems();
+const char* ToICULocale(std::string& locale);
 
 
 // NumberFormat
@@ -110,7 +113,6 @@ std::vector<std::string> GetAvailableCalendars();
 std::string ToBCP47CalendarName(const char* name);
 std::string GetDateTimeStringSkeleton(__jsvalue *locale, __jsvalue *options);
 __jsvalue GetICUPattern(std::string&, std::string& pattern);
-const char* ToICULocale(std::string& locale);
 void ResolveICUPattern(__jsvalue *date_time_format, __jsvalue *pattern);
 
 #endif // JSINTL_H

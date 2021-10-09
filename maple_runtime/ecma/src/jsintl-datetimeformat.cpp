@@ -27,8 +27,6 @@
 #include "jsdate.h"
 #include "jsintl.h"
 
-static const size_t INITIAL_STRING_BUFFER_SIZE = 32;
-
 extern std::unordered_map<std::string,std::vector<std::string>> kDateTimeFormatComponents;
 
 // ECMA-402 1.0 12.1 The Intl.DateTimeFormat Constructor
@@ -738,7 +736,7 @@ __jsvalue FormatDateTime(__jsvalue *date_time_format, __jsvalue *x) {
   UErrorCode status = U_ZERO_ERROR;
   std::string locale_name = ValToStr(&locale);
 
-  UDateFormat *df = udat_open(UDAT_PATTERN, UDAT_PATTERN, locale_name.c_str(), timezone, timezone_len, pattern, pattern_len, &status);
+  UDateFormat *df = udat_open(UDAT_PATTERN, UDAT_PATTERN, ToICULocale(locale_name), timezone, timezone_len, pattern, pattern_len, &status);
   if (U_FAILURE(status)) {
     MAPLE_JS_ASSERT(false && "Error in udat_open()");
   }
@@ -758,7 +756,7 @@ __jsvalue FormatDateTime(__jsvalue *date_time_format, __jsvalue *x) {
   if (U_FAILURE(status)) {
     MAPLE_JS_ASSERT(false && "Error in udat_format()");
   }
-  char *res = (char*)VMMallocGC(sizeof(char)*64);
+  char *res = (char*)VMMallocGC(sizeof(char)*(INITIAL_STRING_BUFFER_SIZE*2));
   u_austrcpy(res, chars);
   std::string res_str(res);
   result = StrToVal(res_str);
@@ -772,6 +770,19 @@ __jsvalue FormatDateTime(__jsvalue *date_time_format, __jsvalue *x) {
 // ECMA-402 1.0 12.3.2
 // Intl.DateTimeFormat.prototype.format
 __jsvalue __jsintl_DateTimeFormatFormat(__jsvalue *date_time_format, __jsvalue *date) {
+
+  // Check 'date_time_format' first.
+  if (__is_undefined(date_time_format) || __is_null(date_time_format) || !__is_js_object(date_time_format)) {
+    MAPLE_JS_TYPEERROR_EXCEPTION();
+  }
+  if (__jsval_to_object(date_time_format)->object_class != JSINTL_DATETIMEFORMAT) {
+    MAPLE_JS_TYPEERROR_EXCEPTION();
+  }
+  // Check 'date'.
+  if (__is_nan(date) || __is_infinity(date) || __is_neg_infinity(date)) {
+    MAPLE_JS_RANGEERROR_EXCEPTION();
+  }
+
   // Step 1.
   // If the [[boundFormat]] internal property of this DateTimeFormat object is
   // undefined, then:
@@ -802,7 +813,7 @@ __jsvalue __jsintl_DateTimeFormatFormat(__jsvalue *date_time_format, __jsvalue *
 #define ATTRS(nargs, length) \
   ((uint32_t)(uint8_t)(nargs == UNCERTAIN_NARGS ? 1: 0) << 24 | (uint32_t)(uint8_t)nargs << 16 | \
      (uint32_t)(uint8_t)length << 8 | JSFUNCPROP_NATIVE)
-    __jsvalue f = __js_new_function((void*)FormatDateTime, NULL, ATTRS(2, 1));
+    __jsvalue f = __js_new_function((void*)FormatDateTime, NULL, ATTRS(2, 0));
     int len = 1;
 
     // Temporary workaround to avoid 'strict' constraint inside __jsfun_pt_bind()
@@ -921,12 +932,14 @@ void ResolveICUPattern(__jsvalue *date_time_format, __jsvalue *pattern) {
 
       // Set 'hour12'.
       if (c == 'h' || c == 'K') {
+        p = StrToVal("hour12");
         value = __boolean_value(true);
+        __jsop_setprop(date_time_format, &p, &value);
       } else if (c == 'H' || c == 'k') {
+        p = StrToVal("hour12");
         value = __boolean_value(false);
+        __jsop_setprop(date_time_format, &p, &value);
       }
-      p = StrToVal("hour12");
-      __jsop_setprop(date_time_format, &p, &value);
     }
   } // end of while
 }
@@ -934,6 +947,15 @@ void ResolveICUPattern(__jsvalue *date_time_format, __jsvalue *pattern) {
 // ECMA-402 1.0 12.3.3
 // Intl.DateTimeFormat.prototype.resolvedOptions()
 __jsvalue __jsintl_DateTimeFormatResolvedOptions(__jsvalue *date_time_format) {
+
+  // Check 'date_time_format' first.
+  if (__is_undefined(date_time_format) || __is_null(date_time_format) || !__is_js_object(date_time_format)) {
+    MAPLE_JS_TYPEERROR_EXCEPTION();
+  }
+  if (__jsval_to_object(date_time_format)->object_class != JSINTL_DATETIMEFORMAT) {
+    MAPLE_JS_TYPEERROR_EXCEPTION();
+  }
+
   __jsobject *dtf_obj = __create_object();
   __jsobj_set_prototype(dtf_obj, JSBUILTIN_INTL_DATETIMEFORMAT_PROTOTYPE);
   dtf_obj->object_class = JSINTL_DATETIMEFORMAT;
@@ -950,7 +972,7 @@ __jsvalue __jsintl_DateTimeFormatResolvedOptions(__jsvalue *date_time_format) {
   for (int i = 0; i < props.size(); i++) {
     p = StrToVal(props[i]);
     v = __jsop_getprop(date_time_format, &p);
-    if (!__is_undefined(&v))
+    if (!__is_undefined(&v) || props[i] == "timeZone")
       __jsop_setprop(&dtf, &p, &v);
   }
   // Handle "pattern".
@@ -1218,11 +1240,6 @@ std::string GetDateTimeStringSkeleton(__jsvalue *locale, __jsvalue *options) {
     }
   }
   return pattern;
-}
-
-const char* ToICULocale(std::string& locale) {
-  replace(locale.begin(), locale.end(), '-', '_');
-  return locale.c_str();
 }
 
 __jsvalue GetICUPattern(std::string& locale, std::string& skeleton) {

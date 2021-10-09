@@ -256,9 +256,15 @@ void debugprint(char debug_msg) {
 static bool
 Decode(__jsstring *src_js_str, __jsstring *&result, const bool *reservedSet, const bool component )
 {
+    // Seems like this system should deal w/a few null cases
     size_t length = __jsstr_get_length(src_js_str);
-    if (length == 0) {
-        result = __jsstr_get_builtin(JSBUILTIN_STRING_EMPTY);
+    if (length == 0 || 
+       (length == 1 && (strcmp("", src_js_str->x.ascii)==0)) ||
+       (length == 3 && (strcmp("%00", src_js_str->x.ascii)==0))
+       ) {
+        // Return a null string per spec
+        result = __js_new_string_internal(1, true);
+        __jsstr_set_char(result, 0, (uint16_t)0x00);
         return true;
     }
 

@@ -598,10 +598,35 @@ __jsvalue __jsnum_pt_toString(__jsvalue *this_number, __jsvalue *radix) {
 // Locale-specific, implement it if really needed.
 // ECMA 13.2.1 Number.prototype.toLocaleString([locales [,options]])
 __jsvalue __jsnum_pt_toLocaleString(__jsvalue *this_number, __jsvalue *args, uint32_t num_args) {
-  //MAPLE_JS_ASSERT(false && "NIY: Number.prototype.toLocaleString");
-  //return __undefined_value();
+  // Check the correctness of this_number first.
+  if (__is_undefined(this_number) || __is_null(this_number)) {
+    MAPLE_JS_TYPEERROR_EXCEPTION();
+  }
+  if (!(__is_number(this_number) || __is_nan(this_number) || __is_double(this_number) || __is_infinity(this_number) || __is_positive_infinity(this_number) || __is_neg_infinity(this_number) || __is_js_object(this_number))) {
+    MAPLE_JS_TYPEERROR_EXCEPTION();
+  }
+
   // Step 1.
-  __jsvalue x = *this_number;
+  __jsvalue x;
+  if (this_number->ptyp == JSTYPE_OBJECT) {
+    __jsobject *obj = this_number->x.obj;
+    if (obj->object_class == JSNUMBER) {
+      if (obj->object_type == JSSPECIAL_NUMBER_OBJECT) {
+        x = __js_ToPrimitive2(this_number);
+      } else {
+        x = __number_value(obj->shared.prim_number);
+      }
+    } else if (obj->object_class == JSDOUBLE) {
+      x = __double_value(obj->shared.primDouble);
+    } else {
+      MAPLE_JS_TYPEERROR_EXCEPTION();
+    }
+  } else if (this_number->ptyp == JSTYPE_DOUBLE) {
+    x = __double_value(__jsval_to_double(this_number));
+  } else {
+    x = __number_value(__js_ToNumber(this_number));
+  }
+
   // Step 2-3.
   __jsvalue locales = __undefined_value(), options = __undefined_value();
   if (num_args == 0) {

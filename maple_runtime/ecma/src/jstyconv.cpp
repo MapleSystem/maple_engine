@@ -87,6 +87,22 @@ bool __js_ToBoolean(__jsvalue *v) {
   return true;
 }
 
+bool __js_ToBoolean(TValue &v) {
+  __jsvalue res;
+  if (IS_NUMBER(v.x.u64))
+    return __jsval_to_number(v) != 0;
+  else if (IS_DOUBLE(v.x.u64))
+    return __jsval_to_double(v) != 0.0;
+  else if (IS_BOOLEAN(v.x.u64))
+    return __jsval_to_boolean(v);
+  else if (IS_STRING(v.x.u64))
+    return __jsstr_get_length(__jsval_to_string(v)) != 0;
+  else if (IS_INFINITY(v.x.u64))
+    return true;
+  else
+    return false;
+}
+
 int32_t __js_ToNumberSlow(__jsvalue *v) {
   switch (__jsval_typeof(v)) {
     case JSTYPE_UNDEFINED:
@@ -335,6 +351,24 @@ __jsobject *__js_ToObject(__jsvalue *v) {
       break;
   }
   return __jsval_to_object(&res);
+}
+
+__jsobject *__js_ToObject(TValue &v) {
+  if (__is_js_object(v))
+    return (__jsobject *)v.x.c.payload;
+  TValue res;
+  if (IS_NUMBER(v.x.u64) || IS_DOUBLE(v.x.u64) || IS_NAN(v.x.u64) || IS_INFINITY(v.x.u64))
+    res = __js_new_num_obj(v);
+  else if (IS_BOOLEAN(v.x.u64))
+    res = __js_new_boo_obj(v);
+  else if (IS_STRING(v.x.u64))
+    res = __js_new_str_obj(v);
+  else if (IS_UNDEFINED(v.x.u64) || IS_NULL(v.x.u64) || IS_NONE(v.x.u64))
+    MAPLE_JS_TYPEERROR_EXCEPTION();
+  else
+    MAPLE_JS_ASSERT(false);
+
+  return __jsval_to_object(res);
 }
 
 // ecma 9.11

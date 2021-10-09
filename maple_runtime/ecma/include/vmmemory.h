@@ -26,6 +26,10 @@
 #include "json.h"
 #include <vector>
 #include <map>
+#include <set>
+#ifdef MM_DEBUG
+#include <list>
+#endif
 using namespace maple;
 
 #if MACHINE64
@@ -55,7 +59,12 @@ enum MemHeadTag {
    COLLECT for collecting the objects in garbage cycles.
    SWEEP for releasing the garbage reference cycles.
    RECALL for normal garbage collection when reference count reduce to zero. */
-enum ManageType { DECREASE, RESTORE, COLLECT, SWEEP, RECALL };
+// enum ManageType { DECREASE, RESTORE, COLLECT, SWEEP, RECALL };
+#ifdef MM_DEBUG
+enum ManageType { MARK_RED, SCAN, SCAN_GREEN, COLLECT, SWEEP, RECALL, CLOSURE };
+#else
+enum ManageType { MARK_RED, SCAN, SCAN_GREEN, COLLECT, SWEEP, RECALL };
+#endif
 
 // struct to maintain cycle roots
 struct CycleRoot {
@@ -77,15 +86,29 @@ enum ManageType {
 };
 #endif
 
+#ifdef MARK_CYCLE_ROOTS
+enum CRCColor { // for cyclic RC (CRC)
+  CRC_GREEN,
+  CRC_RED,
+  CRC_BLUE,
+};
+#endif
+
 struct MemHeader {
   uint16 refcount : 14;
   MemHeadTag memheadtag : 3;
 #ifdef MARK_CYCLE_ROOTS
+#if 0
   bool is_root : 1;
   bool is_decreased : 1;
   bool need_restore : 1;
   bool is_collected : 1;
   uint16 : 11;
+#endif
+  uint8 color : 3;
+  bool in_roots : 1; // is in the set of possible roots of cycles
+  bool visited : 1; // for debug
+  uint16 : 10;
 #else
   uint16 : 15;
 #endif
@@ -169,12 +192,14 @@ class MemoryManager {
   void AppMemShapeSummary();   // output the mmap shape summary of an app.
   void DumpAllocReleaseStats();
   void DumpMMStats();
+  void DumpClosures();
 
   // RC-related
   uint64_t num_rcinc;
   uint64_t num_rcdec;
   uint32 max_rc0_by_tag[MemHeadLast];
   std::map<int, uint32> max_rc_histogram;
+  std::list<void*> crc_closure;
 
   // For leak check
   void* mainSP;
@@ -197,6 +222,11 @@ class MemoryManager {
   AddrMap *free_mmaps_;           // a link list of mmaps for reuse.
   AddrMapNode *free_mmap_nodes_;  // a link list of mmap node for reuse.
 #endif
+  // for reference cycles
+  static const uint32 CRC_TRIGGER_BY_ALLOC_SIZE = 1048576; // 1MB
+  std::set<void*> crc_candidate_roots;
+  uint32 crc_alloc_size;  // when allocation since last collection reaches a threshold, collect cycles
+
 #if MACHINE64
   uint32 addrOffset;
   // std::map<uint32, void *> addrMap;  // map the 32 bits address to 64 bits, for 64-bits machine only

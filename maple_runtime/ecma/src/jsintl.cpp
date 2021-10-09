@@ -732,7 +732,7 @@ __jsvalue RemoveUnicodeExtensions(__jsvalue *locale) {
   std::smatch sm;
   std::string res;
   if (std::regex_search(loc, sm, re)) {
-    res = sm.prefix().str(); // TODO: double-check!
+    res = sm.prefix().str();
   } else {
     res = loc;
   }
@@ -914,6 +914,7 @@ __jsvalue ResolveLocale(__jsvalue *available_locales, __jsvalue *requested_local
 
     // Check if 'found_locale_data' is undefined (JSI9398).
     if (__is_undefined(&found_locale_data)) {
+      // TODO; check!
       break;
     }
 
@@ -1061,7 +1062,7 @@ __jsvalue LookupSupportedLocales(__jsvalue *available_locales,
     k++;
   }
   // Step 5.
-  __jsvalue subset_array = subset; // TODO: double-check!
+  __jsvalue subset_array = subset;
   // Step 6.
   return subset_array;
 }
@@ -1158,7 +1159,7 @@ __jsvalue GetOption(__jsvalue *options, __jsvalue *property, __jsvalue *type,
     // Step 2c.
     // If 'type' is "string", then let 'value' to be ToString(value).
     if (__jsstr_equal(jsstr_type, string_type)) {
-      value = __string_value(__jsval_to_string(&value));
+      value = __string_value(__js_ToString(&value));
     }
     // Step 2d.
     // If 'values' is not undefined, then
@@ -1243,4 +1244,9 @@ std::vector<std::string> GetNumberingSystems() {
   vec.insert(vec.begin(), default_numsys);
 
   return vec;
+}
+
+const char* ToICULocale(std::string& locale) {
+  replace(locale.begin(), locale.end(), '-', '_');
+  return locale.c_str();
 }

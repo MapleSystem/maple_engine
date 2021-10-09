@@ -23,48 +23,96 @@ static inline bool __is_null(__jsvalue *data) {
   return data->ptyp == JSTYPE_NULL;
 }
 
+static inline bool __is_null(maple::TValue &data) {
+  return IS_NULL(data.x.u64);
+}
+
 static inline bool __is_undefined(__jsvalue *data) {
   return data->ptyp == JSTYPE_UNDEFINED;
+}
+
+static inline bool __is_undefined(maple::TValue &data) {
+  return IS_UNDEFINED(data.x.u64);
 }
 
 static inline bool __is_nan(__jsvalue *data) {
   return data->ptyp == JSTYPE_NAN;
 }
 
+static inline bool __is_nan_t(maple::TValue &data) {
+  return IS_NAN(data.x.u64);
+}
+
 static inline bool __is_infinity(__jsvalue *data) {
   return data->ptyp == JSTYPE_INFINITY;
+}
+
+static inline bool __is_infinity_t(maple::TValue &data) {
+  return IS_INFINITY(data.x.u64);
 }
 
 static inline bool __is_positive_infinity(__jsvalue *data) {
   return __is_infinity(data) && (data->x.u32 == 0);
 }
 
+static inline bool __is_positive_infinity(maple::TValue &data) {
+  return __is_infinity_t(data) && (data.x.u32 == 0);
+}
+
 static inline bool __is_neg_infinity(__jsvalue *data) {
   return __is_infinity(data) && (data->x.u32 == 1);
+}
+
+static inline bool __is_neg_infinity(maple::TValue &data) {
+  return __is_infinity_t(data) && (data.x.u32 == 1);
 }
 
 static inline bool __is_null_or_undefined(__jsvalue *data) {
   return (data->ptyp == JSTYPE_NULL) || (data->ptyp == JSTYPE_UNDEFINED);
 }
 
+static inline bool __is_null_or_undefined(maple::TValue &data) {
+  return IS_NULL(data.x.u64) || IS_UNDEFINED(data.x.u64);
+}
+
 static inline bool __is_boolean(__jsvalue *data) {
   return data->ptyp == JSTYPE_BOOLEAN;
+}
+
+static inline bool __is_boolean(maple::TValue &data) {
+  return IS_BOOLEAN(data.x.u64);
 }
 
 static inline bool __is_string(__jsvalue *data) {
   return data->ptyp == JSTYPE_STRING;
 }
 
+static inline bool __is_string(maple::TValue &data) {
+  return IS_STRING(data.x.u64);
+}
+
 static inline bool __is_number(__jsvalue *data) {
   return data->ptyp == JSTYPE_NUMBER;
+}
+
+static inline bool __is_number(maple::TValue &data) {
+  return IS_NUMBER(data.x.u64);
 }
 
 static inline bool __is_double(__jsvalue *data) {
   return data->ptyp == JSTYPE_DOUBLE;
 }
 
+static inline bool __is_double(maple::TValue data) {
+  return IS_DOUBLE(data.x.u64);
+}
+
 static inline bool __is_int32(__jsvalue *data) {
   return __is_number(data);
+}
+
+static inline bool __is_int32(maple::TValue &data) {
+  return IS_NUMBER(data.x.u64);
 }
 
 static inline bool __is_primitive(uint32_t ptyp) {
@@ -76,11 +124,24 @@ static inline bool __is_primitive(__jsvalue *data) {
   return __is_primitive(data->ptyp);
 }
 
+static inline bool __is_primitive(maple::TValue &data) {
+  return IS_NUMBER(data.x.u64) || IS_BOOLEAN(data.x.u64) || IS_DOUBLE(data.x.u64) || IS_STRING(data.x.u64) ||
+         IS_NAN(data.x.u64) || IS_UNDEFINED(data.x.u64) || IS_NULL(data.x.u64) || IS_INFINITY(data.x.u64);
+}
+
 static inline bool __is_js_object(__jsvalue *data) {
   return data->ptyp == JSTYPE_OBJECT;
 }
 
+static inline bool __is_js_object(maple::TValue &data) {
+  return IS_OBJECT(data.x.u64);
+}
+
 static inline bool __is_js_object_or_primitive(__jsvalue *data) {
+  return __is_js_object(data) || __is_primitive(data);
+}
+
+static inline bool __is_js_object_or_primitive(maple::TValue &data) {
   return __is_js_object(data) || __is_primitive(data);
 }
 
@@ -88,8 +149,16 @@ static inline bool __is_positive_zero(__jsvalue *data) {
   return (data->ptyp == JSTYPE_NUMBER && data->x.asbits == POS_ZERO);
 }
 
+static inline bool __is_positive_zero(maple::TValue &data) {
+  return data.x.u64 == POS_ZERO;
+}
+
 static inline bool __is_negative_zero(__jsvalue *data) {
   return (data->ptyp == JSTYPE_DOUBLE && data->x.asbits == NEG_ZERO);
+}
+
+static inline bool __is_negative_zero(maple::TValue &data) {
+  return data.x.u64 == NEG_ZERO;
 }
 
 #if MACHINE64
@@ -103,8 +172,14 @@ static inline bool IsNeedRc(uint8_t flag) {
 static inline __jsstring *__jsval_to_string(__jsvalue *data) {
   return (__jsstring *)data->x.str;
 }
+static inline __jsstring *__jsval_to_string(maple::TValue &data) {
+  return (__jsstring *)data.x.c.payload;
+}
 static inline __jsobject *__jsval_to_object(__jsvalue *data) {
   return data->x.obj;
+}
+static inline __jsobject *__jsval_to_object(maple::TValue &data) {
+  return (__jsobject *)data.x.c.payload;
 }
 static inline void __set_string(__jsvalue *data, __jsstring *str) {
   data->ptyp = JSTYPE_STRING;
@@ -113,6 +188,9 @@ static inline void __set_string(__jsvalue *data, __jsstring *str) {
 static inline void __set_object(__jsvalue *data, __jsobject *obj) {
   data->ptyp = JSTYPE_OBJECT;
   data->x.obj = obj;
+}
+static inline void __set_object(maple::TValue &data, __jsobject *obj) {
+  data.x.u64 = (uint64_t)obj | NAN_OBJECT;;
 }
 static inline bool __is_js_function(__jsvalue *data) {
   return __is_js_object(data) && (data->x.obj->object_class == JSFUNCTION);
@@ -125,6 +203,12 @@ static inline double __jsval_to_double(__jsvalue *data) {
     return (double) data->x.i32;
   //  MAPLE_JS_ASSERT(__is_double(data));
   return data->x.f64;
+}
+static inline double __jsval_to_double(maple::TValue &data) {
+  if (IS_NUMBER(data.x.u64))
+    return (double) data.x.i32;
+  //  MAPLE_JS_ASSERT(__is_double(data));
+  return data.x.f64;
 }
 static inline __jsvalue __double_value(double f64) {
   __jsvalue jsval;
@@ -177,9 +261,17 @@ static inline bool __is_none(__jsvalue *data) {
   return data->ptyp == JSTYPE_NONE && data->x.u32 == 0;
 }
 
+static inline bool __is_none(maple::TValue &data) {
+  return IS_NONE(data.x.u64);
+}
+
 static inline bool __jsval_to_boolean(__jsvalue *data) {
   //  MAPLE_JS_ASSERT(__is_boolean(data));
   return (bool)data->x.boo;
+}
+
+static inline bool __jsval_to_boolean(maple::TValue &data) {
+  return (bool)data.x.u8;
 }
 
 static inline int32_t __jsval_to_number(__jsvalue *data) {
@@ -187,8 +279,16 @@ static inline int32_t __jsval_to_number(__jsvalue *data) {
   return data->x.i32;
 }
 
+static inline int32_t __jsval_to_number(maple::TValue &data) {
+  return data.x.i32;
+}
+
 static inline int32_t __jsval_to_int32(__jsvalue *data) {
   return __jsval_to_number(data);
+}
+
+static inline int32_t __jsval_to_int32(maple::TValue &data) {
+  return data.x.i32;
 }
 
 static inline uint32_t __jsval_to_uint32(__jsvalue *data) {
@@ -222,6 +322,16 @@ static inline __jsvalue __object_value(__jsobject *obj) {
     return __undefined_value();
   }
   __set_object(&data, obj);
+  return data;
+}
+
+static inline maple::TValue __object_TValue(__jsobject *obj) {
+  maple::TValue data;
+  if (!obj) {
+    data.x.u64 = NAN_UNDEFINED;
+    return data;
+  }
+  __set_object(data, obj);
   return data;
 }
 

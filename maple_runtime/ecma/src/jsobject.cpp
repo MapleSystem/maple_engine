@@ -1367,6 +1367,57 @@ __jsvalue __jsobj_internal_Get(__jsobject *obj, __jsvalue *p) {
   }
 }
 
+__jsvalue __jsobj_internal_Get(__jsobject *obj, maple::TValue &p) {
+  if (obj->object_type == JSREGULAR_ARRAY) {
+    MAPLE_JS_ASSERT(obj->prop_list == NULL);
+    __jsvalue *array = obj->shared.array_props;
+    uint32_t index = __jsarr_getIndex(p);
+    if (index != MAX_ARRAY_INDEX && index <= ARRAY_MAXINDEXNUM_INTERNAL) {
+      uint32_t length = __jsobj_helper_get_length(obj);
+      if (index < length) {
+        __jsvalue elem = __jsarr_GetRegularElem(obj, array, index);
+        return __is_none(&elem) ? __undefined_value() : elem;
+      } else {
+        __jsobject *proto = __jsobj_get_prototype(obj);
+        return __jsobj_internal_Get(proto, p);
+      }
+    } else {
+      __jsstring *name = __js_ToString(p);
+      if (__jsstr_equal_to_builtin(name, JSBUILTIN_STRING_LENGTH)) {
+        if (!__is_string(p)) {
+          memory_manager->RecallString(name);
+        }
+        return array[0];
+      }
+      __jsobject *proto = __jsobj_get_prototype(obj);
+      if (proto) {
+        __jsvalue res = __jsobj_internal_Get(proto, name);
+        if (!__is_string(p)) {
+          memory_manager->RecallString(name);
+        }
+        return res;
+      }
+    }
+  }
+  __jsstring *name = __js_ToString(p);
+  bool isNum;
+  uint32 idxNum = __jsstr_is_numidx(name, isNum);
+  if (isNum) {
+    if(__is_string(p) == false) // if p is a string, name is the same string wrapped by p, and we should not release name.
+      memory_manager->RecallString(name);
+    return __jsobj_internal_GetByValue(obj, idxNum);
+  } else {
+    if (!__is_string(p)) {
+      GCIncRf(name);
+    }
+    __jsvalue v = __jsobj_internal_Get(obj, name);
+    if (!__is_string(p)) {
+      GCDecRf(name);
+    }
+    return v;
+  }
+}
+
 // Fixme: Donot need this.
 __jsvalue __jsobj_internal_Get(__jsobject *o, __jsbuiltin_string_id id) {
   return __jsobj_internal_Get(o, __jsstr_get_builtin(id));
@@ -2819,6 +2870,70 @@ void __jsop_setprop(__jsvalue *o, __jsvalue *p, __jsvalue *v) {
   }
 }
 
+void __jsop_setprop(TValue &o, TValue &p, TValue &v) {
+  __jsobject *obj = __is_js_object(o) ? __jsval_to_object(o) : __js_ToObject(o);
+  if (obj->object_type == JSREGULAR_ARRAY) {
+    MAPLE_JS_ASSERT(obj->prop_list == NULL);
+    __jsvalue *array = obj->shared.array_props;
+    uint32_t index = __jsarr_getIndex(p);
+    uint32_t length = __jsobj_helper_get_length(obj);
+    if (index != MAX_ARRAY_INDEX) {
+      if (index <= ARRAY_MAXINDEXNUM_INTERNAL) {
+        if (index >= length) {
+          obj->shared.array_props = __jsarr_RegularRealloc(array, length, index + 1);
+          array = obj->shared.array_props;
+        }
+        MValue mv = TValue2MValue(v);
+        __set_regular_elem(array, index, &mv);
+        return;
+      } else {
+        MAPLE_JS_ASSERT(index > ARRAY_MAXINDEXNUM_INTERNAL && index < MAX_ARRAY_INDEX);
+        // update array length
+        if (index >= length) {
+          obj->shared.array_props = __jsarr_RegularRealloc(array, length, ARRAY_MAXINDEXNUM_INTERNAL);
+          obj->shared.array_props[0] = (index+1 < INT32_MAX) ? __number_value(index+1) :
+                                                               __double_value(index+1);
+        }
+      }
+    } else {
+      __jsstring *pstr = __js_ToString(p);
+      bool isLength = __jsstr_equal_to_builtin(pstr, JSBUILTIN_STRING_LENGTH);
+      if (!__is_string(p)) {
+        memory_manager->RecallString(pstr);
+      }
+      if (isLength) {
+        if (__js_ToNumber(v) >= 0) {
+          uint32_t old_len = __jsobj_helper_get_length(obj);
+          uint32_t new_len = __js_ToUint32(v);
+          if (new_len != old_len) {
+            obj->shared.array_props = __jsarr_RegularRealloc(array, old_len, new_len);
+            return;
+          } else {
+            return;
+          }
+        }
+        MAPLE_JS_EXCEPTION(false && "RangeError!");
+      }
+    }
+  }
+  // property index range is [0, 0xffffffff]
+  if (__is_number(p) && __jsval_to_number(p) >= 0) {
+    int32_t num = __jsval_to_number(p);
+    __jsvalue mv = TValue2MValue(v);
+    __jsobj_internal_PutByValue(obj, num, &mv, false);
+  } else {
+    __jsstring *name = __js_ToString(p);
+    __jsvalue mv = TValue2MValue(v);
+    __jsobj_internal_Put(obj, name, &mv, false);
+    if (!__is_string(p)) {
+      memory_manager->RecallString(name);
+    }
+  }
+  if (!__is_js_object(o)) {
+    memory_manager->ManageObject(obj, RECALL);
+  }
+}
+
 void __jsop_initprop(__jsvalue *o, __jsvalue *p, __jsvalue *v) {
   MAPLE_JS_ASSERT(__is_js_object(o));
   __jsobject *obj = __jsval_to_object(o);
@@ -2863,6 +2978,15 @@ void __jsop_initprop_setter(__jsvalue *o, __jsvalue *p, __jsvalue *v) {
     __jsobj_internal_DefineOwnPropertyByValue(obj, p->x.u32, desc, false);
   else
     __jsobj_internal_DefineOwnProperty(obj, p, desc, false);
+}
+
+__jsvalue __jsop_getprop(maple::TValue &o, maple::TValue &p) {
+  __jsobject *obj = __is_js_object(o) ? __jsval_to_object(o) : __js_ToObject(o);
+  __jsvalue v = __jsobj_internal_Get(obj, p);
+  if (!__is_js_object(o)) {
+    memory_manager->ManageObject(obj, RECALL);
+  }
+  return v;
 }
 
 __jsvalue __jsop_getprop(__jsvalue *o, __jsvalue *p) {

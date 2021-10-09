@@ -80,6 +80,7 @@ void *VMMallocGC(uint32 size, MemHeadTag tag, bool init_p) {
 #endif
   memheaderp->memheadtag = tag;
   memheaderp->refcount = 0;
+  memheaderp->in_roots = false;
   if (memory_manager->IsDebugGC()) {
     printf("memory %p was allocated with header %d size %d\n", ((void *)((uint8 *)memory + head_size)), tag, alignedsize);
   }
@@ -424,6 +425,9 @@ void MemoryManager::AppMemLeakCheck() {
                    BlkSize2BitvectorSize(ginterpreter->gp_size_), false /* offset is positive */);
 #endif
 
+  printf("\nChecking mem leak...\n");
+  printf("Size of cycle_candidate_roots= %lu\n", crc_candidate_roots.size());
+
   printf("Releasing builtin, app_mem_usage= %u alloc= %u release= %u max= %u\n", app_mem_usage, mem_allocated, mem_released, max_app_mem_usage);
   uint32 released_b4 = mem_released;
 
@@ -445,6 +449,8 @@ void MemoryManager::AppMemLeakCheck() {
   BatchRCDec(mainGP, mainTopGP);
 
   DumpAllocReleaseStats();
+
+  printf("After builtin, main, global, size of cycle_candidate_roots= %lu\n", crc_candidate_roots.size());
 
   //------------------------------------------------
   //live objects
@@ -481,12 +487,14 @@ void MemoryManager::AppMemLeakCheck() {
   //printf("Num of alloc count excluding those with MaxRC=0: %u\n", ta_count - t_max_rc0_released - t_max_rc0_live);
 
 #ifdef MARK_CYCLE_ROOTS
+  printf("\nCollecting reference cycles...\n");
   RecallCycle();
   RecallRoots(cycle_roots);
+
 #else
   MarkAndSweep();
 #endif
-  printf("after reclaim, app_mem_usage= %u alloc= %u release= %u max= %u\n", app_mem_usage, mem_allocated, mem_released, max_app_mem_usage);
+  printf("After reclaim, app_mem_usage= %u alloc= %u release= %u max= %u\n", app_mem_usage, mem_allocated, mem_released, max_app_mem_usage);
 
   if (app_mem_usage != 0) {
     printf("[Memory Manager] %d Bytes heap memory leaked!\n", app_mem_usage);
@@ -632,6 +640,8 @@ void MemoryManager::Init(void *app_memory, uint32 app_memory_size, void *vm_memo
 
   heap_free_big_offset_ = total_small_size_;
   free_memory_chunk_ = NULL;
+
+  crc_alloc_size = 0;
 #ifndef RC_NO_MMAP
   free_mmaps_ = NULL;
   free_mmap_nodes_ = NULL;
@@ -691,6 +701,12 @@ void *MemoryManager::Malloc(uint32 size, bool init_p) {
 #if DEBUGGC
   assert((IsAlignedBy4(size)) && "memory doesn't align by 4 bytes");
 #endif
+  crc_alloc_size += size;
+  if (crc_alloc_size > CRC_TRIGGER_BY_ALLOC_SIZE) {
+    crc_alloc_size = 0;
+    RecallCycle();
+  }
+
   mchunk = heap_memory_bank_->GetFreeChunk(size);
   void *retmem = NULL;
   if (!mchunk) {
@@ -835,6 +851,13 @@ void MemoryManager::RecallMem(void *mem, uint32 size) {
   live_objects.erase(mem);
 #endif  // MM_DEBUG
 
+  if (GetMemHeader(mem).memheadtag == MemHeadJSObj) {
+    if (GetMemHeader(mem).in_roots == true) {
+      GetMemHeader(mem).in_roots = false;
+      crc_candidate_roots.erase(mem);
+    }
+  }
+
   MemoryChunk *mchunk = NewMemoryChunk(offset, alignedsize + head_size, NULL);
   // InsertMemoryChunk(mchunk);
   heap_memory_bank_->PutFreeChunk(mchunk);
@@ -944,6 +967,12 @@ void MemoryManager::GCDecRf(void *addr) {
       default:
         MIR_FATAL("unknown GC object type");
     }
+  }
+
+  // RC != 0 after decrease; if it's jsobject, then possible root of cycle
+  if (GetMemHeader(true_addr).memheadtag == MemHeadJSObj && GetMemHeader(true_addr).in_roots == false) {
+    GetMemHeader(true_addr).in_roots = true;
+    crc_candidate_roots.insert(true_addr);
   }
 }
 
@@ -1128,25 +1157,65 @@ void MemoryManager::ManageChildObj(__jsobject *obj, ManageType flag) {
   if (!obj) {
     return;
   }
-  if (flag == DECREASE) {
+  // if (flag == DECREASE) {
+  if (flag == MARK_RED) {
+#if 0
     if (!(--GetMemHeader(obj).refcount)) {
       if (GetMemHeader(obj).is_root && GetMemHeader(obj).is_decreased) {
         return;
       }
       ManageObject(obj, flag);
     }
-  } else if (flag == RESTORE) {
+#endif
+    GetMemHeader(obj).refcount--;  // parent just marked red, do RC-- regardless of color
+    if (GetMemHeader(obj).color != CRC_RED) { // if already red, nothing to do
+      GetMemHeader(obj).color = CRC_RED;
+      ManageObject(obj, flag); // continue MARK_RED with children
+    }
+  } else if (flag == SCAN) { // parent just maked blue
+    if (GetMemHeader(obj).color == CRC_RED) { // SCAN only applies to red nodes
+      if (GetMemHeader(obj).refcount > 0) { // this node must have external references; turn green
+        ManageObject(obj, SCAN_GREEN); // continue with SCAN_GREEN for children
+        GetMemHeader(obj).color = CRC_GREEN;
+      } else { // RC=0; this is a garbage node
+        GetMemHeader(obj).color = CRC_BLUE;
+        ManageObject(obj, SCAN); // continue wth SCAN for children
+      }
+    }
+  } else if (flag == SCAN_GREEN) { // parent just turned green, so children turn green too
+#if 0
     if (++GetMemHeader(obj).refcount == 1) {
       ManageObject(obj, flag);
     }
-  } else if (flag == COLLECT) {
+#endif
+    GetMemHeader(obj).refcount++; // RC++ regardless of color
+    if (GetMemHeader(obj).color != CRC_GREEN) {
+      GetMemHeader(obj).color = CRC_GREEN;
+      ManageObject(obj, SCAN_GREEN); // continue SCAN_GREEN with children
+    }
+  } else if (flag == COLLECT) { // collect garbage (blue) nodes
+/*
     if ((!GetMemHeader(obj).refcount) && (!GetMemHeader(obj).is_collected)) {
       AddCycleRootNode(&garbage_roots, obj);
       GetMemHeader(obj).is_collected = true;
       ManageObject(obj, flag);
     }
+*/
+    if (GetMemHeader(obj).color == CRC_BLUE) {
+      GetMemHeader(obj).color = CRC_GREEN;
+      AddCycleRootNode(&garbage_roots, obj);
+      ManageObject(obj, COLLECT);
+    }
   } else if (flag == RECALL) {
     GCDecRf(obj);
+#ifdef MM_DEBUG
+  } else if (flag == CLOSURE) {
+    if(GetMemHeader(obj).visited == false) {
+      GetMemHeader(obj).visited = true;
+      crc_closure.push_back(obj);
+      ManageObject(obj, CLOSURE);
+    }
+#endif
   } else {
     return;
   }
@@ -1179,8 +1248,47 @@ void MemoryManager::ManageEnvironment(void *envptr, ManageType flag) {
   if (!envptr) {
     return;
   }
+
+  if (flag != RECALL) {
+// ToDo: if flag is not RECALL
+    return;
+  }
+
 #ifdef MACHINE64
   //assert(false && "NYI");
+  uint64* ptr = (uint64*)envptr;
+  uint32 argnums = *(uint32*)ptr;
+  ptr++;
+  void *parentenv = (void*)(*ptr);
+  if (parentenv) {
+    if (flag == RECALL) {
+      GCDecRf(parentenv);
+    } else {
+// ToDo: when flag is not RECALL
+      // ManageEnvironment(parentenv, flag);
+    }
+  }
+  ptr++;
+  for (uint32 i = 1; i <= argnums; i++) {
+    void* val = (void*)(*ptr);
+    void *true_addr = (void*)((long)val & PAYLOAD_MASK);
+
+    if (flag == RECALL && IsHeap(true_addr)) {
+      if (GetMemHeader(true_addr).memheadtag == MemHeadJSObj) {
+        GCDecRf(true_addr);
+      }
+      else {
+        // assert(0);
+        GCDecRf(true_addr);
+      }
+    }
+    ptr++;
+  }
+
+  if (flag == RECALL) {
+    uint32 totalsize = sizeof(uint64) + sizeof(void *) + argnums * sizeof(void*);
+    RecallMem(envptr, totalsize);
+  }
   return;
 #else
   uint32 *u32envptr = (uint32 *)envptr;
@@ -1339,65 +1447,134 @@ void MemoryManager::ResetCycleRoots() {
   }
   CycleRoot *root = cycle_roots;
   while (root) {
+/*
     GetMemHeader(root->obj).is_decreased = false;
     GetMemHeader(root->obj).need_restore = false;
     GetMemHeader(root->obj).is_collected = false;
+*/
+    GetMemHeader(root->obj).color = CRC_GREEN;
+    GetMemHeader(root->obj).in_roots = false;
     root = root->next;
   }
 }
 
+#ifdef MM_DEBUG
+void MemoryManager::DumpClosures() {
+  printf("Closures:\n");
+  CycleRoot *root = cycle_roots;
+  while (root) {
+    assert(crc_closure.size() == 0);
+    {
+      crc_closure.push_back(root->obj);
+      GetMemHeader(root->obj).visited = true;
+      ManageObject(root->obj, CLOSURE);
+      // dump closure
+      for (auto a : crc_closure) {
+        printf("%p (color= %d rc= %d) ", a, (int)GetMemHeader(a).color, (int)GetMemHeader(a).refcount);
+        GetMemHeader(a).visited = false;
+      }
+      printf("\n");
+      crc_closure.clear();
+    }
+    root = root->next;
+  }
+}
+#endif
+
 void MemoryManager::RecallCycle() {
+  if (crc_candidate_roots.empty()) {
+    return;
+  }
+
+  for (auto a : crc_candidate_roots)
+    AddCycleRootNode(&cycle_roots, (__jsobject*)a);
+  crc_candidate_roots.clear();
+
+/*
   if (!cycle_roots) {
     return;
   }
+*/
+
+  // Step 1: mark red transitive closure of root. All nodes in the closure are marked red.
+  // In the process, whenever a node is visited its RC is decreased.
   CycleRoot *root = cycle_roots;
-  // Decrease cycle_roots
+#ifdef MM_DEBUG
+  int cnt1 = 0;
+  int cnt2 = 0;
+#endif
   while (root) {
-    // this must not be a cycle header, so delete the node
-    if (!GetMemHeader(root->obj).refcount) {
+#ifdef MM_DEBUG
+    cnt1++;
+#endif
+    if (GetMemHeader(root->obj).refcount == 0) { // if RC=0, it's garbage
+#ifdef MM_DEBUG
+      cnt2++;
+#endif
+      // todo: when object becomes garbage, it is recalled. What's the implication?
       DeleteCycleRootNode(root);
     } else {
-      GetMemHeader(root->obj).is_decreased = true;
-      ManageObject(root->obj, DECREASE);
-    }
-    root = root->next;
-  }
-  root = cycle_roots;
-  // After decrement, if the refcount of a cycle-root object is greater than 0,
-  // then it needs to be restored.
-  bool need_restore = false;
-  while (root) {
-    if (GetMemHeader(root->obj).refcount) {
-      GetMemHeader(root->obj).need_restore = true;
-      need_restore = true;
-    }
-    root = root->next;
-  }
-  root = cycle_roots;
-  // Restore cycle_roots
-  if (need_restore) {
-    while (root) {
-      if (GetMemHeader(root->obj).need_restore) {
-        ManageObject(root->obj, RESTORE);
+      if (GetMemHeader(root->obj).color != CRC_RED) {
+        GetMemHeader(root->obj).color = CRC_RED;
+        ManageObject(root->obj, MARK_RED);
       }
-      root = root->next;
     }
+    root = root->next;
   }
+
+#ifdef MM_DEBUG
+  printf("In RecallCycle, total %d candidates, garbage= %d, rest= %d\n", cnt1, cnt2, cnt1-cnt2);
+  // DumpClosures();
+#endif
+
+  // Step 2 scan the closure and distinguish live and dead nodes. If a red node's RC=0,
+  // it is garbage and marked blue. And SCAN is continued with its children. Otherwise,
+  // it must have external reference and is marked green. SCAN_GREEN is continued with
+  // its children. When SCAN_GREEN reaches a node, its RC is increased to undo the RC--
+  // during MARK_RED.
   root = cycle_roots;
-  // After decrement and restoring, if the refcount of a cycle-root object is 0, then this object
-  // is a garbage cycle header. Trace this header to collect garbage objects in this cycle.
+  while (root) {
+    if (GetMemHeader(root->obj).color == CRC_RED) {
+      if (GetMemHeader(root->obj).refcount > 0) {
+        GetMemHeader(root->obj).color = CRC_GREEN;
+        ManageObject(root->obj, SCAN_GREEN);
+      }
+      else {
+        GetMemHeader(root->obj).color = CRC_BLUE;
+        ManageObject(root->obj, SCAN);
+      }
+    }
+    root = root->next;
+  }
+
+#ifdef MM_DEBUG
+  // DumpClosures();
+#endif
+
+  // Step 3 collect BLUE nodes, i.e., garbage.
+#ifdef MM_DEBUG
+  int num_garbage_cycles = 0;
+#endif
+  root = cycle_roots;
   while (root) {
     CycleRoot *next_root = root->next;  // in case the current root is deleted after collected
-    if (!GetMemHeader(root->obj).refcount) {
-      if (!GetMemHeader(root->obj).is_collected) {
-        AddCycleRootNode(&garbage_roots, root->obj);
-        GetMemHeader(root->obj).is_collected = true;
-        ManageObject(root->obj, COLLECT);
-      }
+    if (GetMemHeader(root->obj).color == CRC_BLUE) {
+#ifdef MM_DEBUG
+      num_garbage_cycles++;
+#endif
+      GetMemHeader(root->obj).color = CRC_GREEN;
+      AddCycleRootNode(&garbage_roots, root->obj);
+      ManageObject(root->obj, COLLECT);
       DeleteCycleRootNode(root);
     }
     root = next_root;
   }
+
+#ifdef MM_DEBUG
+  printf("Num_garbage_cycles= %d\n", num_garbage_cycles);
+#endif
+
+  // Step 4 release the collected garbage cycle nodes.
   root = garbage_roots;
   // Sweep garbage-cycle
   is_sweep = true;
@@ -1407,8 +1584,11 @@ void MemoryManager::RecallCycle() {
   }
   is_sweep = false;
   ResetCycleRoots();
+  RecallRoots(cycle_roots); // ToDo: the remaining roots are not garbage, but could they become cycle garbage later?
+  cycle_roots = nullptr;
+ 
   RecallRoots(garbage_roots);
-  garbage_roots = NULL;
+  garbage_roots = nullptr;
 }
 
 #else
