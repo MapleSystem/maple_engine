@@ -106,7 +106,7 @@ static inline __jsobject *__get_set(__jsprop_desc desc) {
   return __has_set(desc) ? desc.named_accessor_property.set : NULL;
 }
 
-static inline __jsvalue __get_value(__jsprop_desc desc) {
+static inline TValue __get_value(__jsprop_desc desc) {
   //  MAPLE_JS_ASSERT(__has_value(desc));
   return desc.named_data_property.value;
 }
@@ -133,9 +133,9 @@ static inline void __set_set(__jsprop_desc *desc, __jsobject *o) {
   desc->named_accessor_property.set = o;
 }
 
-static inline void __set_value(__jsprop_desc *desc, __jsvalue *v) {
+static inline void __set_value(__jsprop_desc *desc, TValue &v) {
   desc->s.fields |= JSPROP_HAS_VALUE;
-  desc->named_data_property.value = *v;
+  desc->named_data_property.value = v;
 }
 
 static inline void __set_get_gc(__jsprop_desc *desc, __jsobject *o) {
@@ -154,11 +154,11 @@ static inline void __set_set_gc(__jsprop_desc *desc, __jsobject *o) {
   __set_set(desc, o);
 }
 
-static inline void __set_value_gc(__jsprop_desc *desc, __jsvalue *v) {
+static inline void __set_value_gc(__jsprop_desc *desc, TValue &v) {
 #ifndef RC_NO_MMAP
-  UpdateGCReference(&desc->named_data_property.value.x.payload.ptr, *v);
+  UpdateGCReference(&desc->named_data_property.value.x.payload.ptr, v);
 #else
-  GCCheckAndUpdateRf(desc->named_data_property.value.x.asbits, IsNeedRc(desc->named_data_property.value.ptyp),  v->x.asbits, IsNeedRc(v->ptyp));
+  GCCheckAndUpdateRf(GET_PAYLOAD(desc->named_data_property.value), IS_NEEDRC(desc->named_data_property.value.x.u64),  GET_PAYLOAD(v), IS_NEEDRC(v.x.u64));
 #endif
   __set_value(desc, v);
 }
@@ -187,9 +187,9 @@ static inline __jsprop_desc __new__desc() {
   return d;
 }
 
-static inline __jsprop_desc __new_value_desc(__jsvalue *v, uint32_t attrs) {
+static inline __jsprop_desc __new_value_desc(TValue &v, uint32_t attrs) {
   __jsprop_desc d;
-  d.named_data_property.value = *v;
+  d.named_data_property.value = v;
   d.attrs = attrs;
   return d;
 }
@@ -233,17 +233,17 @@ static inline __jsobject *__create_object() {
   return obj;
 }
 
-static inline bool __is_boolean_object(__jsvalue *v) {
+static inline bool __is_boolean_object(TValue &v) {
   return __is_js_object(v) && __jsval_to_object(v)->object_class == JSBOOLEAN;
 }
 
-static inline bool __is_number_object(__jsvalue *v) {
+static inline bool __is_number_object(TValue &v) {
   return __is_js_object(v) && __jsval_to_object(v)->object_class == JSNUMBER;
 }
-static inline bool __is_double_object(__jsvalue *v) {
+static inline bool __is_double_object(TValue &v) {
   return __is_js_object(v) && __jsval_to_object(v)->object_class == JSDOUBLE;
 }
-static inline bool __is_string_object(__jsvalue *v) {
+static inline bool __is_string_object(TValue &v) {
   return __is_js_object(v) && __jsval_to_object(v)->object_class == JSSTRING;
 }
 

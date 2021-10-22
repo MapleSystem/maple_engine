@@ -70,7 +70,7 @@
 struct __attribute__((packed)) __jsprop_desc {
   union {
     struct {
-      __jsvalue value;
+      TValue value;
     } named_data_property;
     struct {
       __jsobject *get;
@@ -107,7 +107,7 @@ struct __attribute__((packed)) __jsfast_prop {
 
   __jsstring *name;
   struct __jsfast_prop *next;
-  __jsvalue v;
+  TValue v;
 };
 
 // when any new class is added, the table for class names defined in function
@@ -195,7 +195,7 @@ struct __jsobject {
     __jsfast_prop *fast_props;
     // Simple values for array-properties with an "Index" name and default
     // attributes.
-    __jsvalue *array_props;
+    TValue *array_props;
     // For function objects.
     __jsfunction *fun;
     // Primitive Value for string-object.
@@ -248,22 +248,22 @@ static inline __jsobject *__jsobj_get_prototype(__jsobject *obj) {
 
 void __jsobj_helper_reject(bool throw_p);
 void __jsobj_helper_convert_to_generic(__jsobject *obj);
-void __jsobj_helper_add_value_property(__jsobject *obj, __jsvalue *name, __jsvalue *v, uint32_t attrs, __jsprop *prop_cache = NULL);
-void __jsobj_helper_add_value_property(__jsobject *obj, __jsstring *name, __jsvalue *v, uint32_t attrs, __jsprop *prop_cache = NULL);
-void __jsobj_helper_add_value_property(__jsobject *obj, __jsbuiltin_string_id id, __jsvalue *v, uint32_t attrs, __jsprop *prop_cache = NULL);
-__jsprop *__jsobj_helper_init_value_property(__jsobject *obj, __jsbuiltin_string_id id, __jsvalue *v, uint32_t attrs);
+void __jsobj_helper_add_value_property(__jsobject *obj, TValue &name, TValue &v, uint32_t attrs, __jsprop *prop_cache = NULL);
+void __jsobj_helper_add_value_property(__jsobject *obj, __jsstring *name, TValue &v, uint32_t attrs, __jsprop *prop_cache = NULL);
+void __jsobj_helper_add_value_property(__jsobject *obj, __jsbuiltin_string_id id, TValue &v, uint32_t attrs, __jsprop *prop_cache = NULL);
+__jsprop *__jsobj_helper_init_value_property(__jsobject *obj, __jsbuiltin_string_id id, TValue &v, uint32_t attrs);
 
 uint32_t __jsobj_helper_get_length(__jsobject *obj);
 uint64_t __jsobj_helper_get_lengthsize(__jsobject *obj);
-__jsvalue __jsobj_helper_get_length_value(__jsobject *obj);
+TValue __jsobj_helper_get_length_value(__jsobject *obj);
 void __jsobj_helper_set_length(__jsobject *obj, uint64_t length, bool throw_p);
 __jsobject *__js_new_obj_obj_0();
 // Helper function for object constructors.
 __jsprop *__create_builtin_property(__jsobject *obj, __jsstring *name);
-bool __jsobj_helper_HasPropertyAndGet(__jsobject *obj, __jsbuiltin_string_id id, __jsvalue *result);
-bool __jsobj_helper_HasPropertyAndGet(__jsobject *obj, uint32_t index, __jsvalue *result);
-bool __jsobj_helper_HasPropertyAndGet(__jsobject *obj, __jsstring *p, __jsvalue *result);
-bool __jsobj_helper_GetAndCall(__jsobject *obj, __jsbuiltin_string_id id, __jsvalue *result);
+bool __jsobj_helper_HasPropertyAndGet(__jsobject *obj, __jsbuiltin_string_id id, TValue *result);
+bool __jsobj_helper_HasPropertyAndGet(__jsobject *obj, uint32_t index, TValue *result);
+bool __jsobj_helper_HasPropertyAndGet(__jsobject *obj, __jsstring *p, TValue *result);
+bool __jsobj_helper_GetAndCall(__jsobject *obj, __jsbuiltin_string_id id, TValue *result);
 // ecma 8.10.1
 // bool __jsprop_desc_IsAccessorDescriptor(__jsprop_desc desc);
 // ecma 8.10.2
@@ -271,97 +271,97 @@ bool __jsobj_helper_GetAndCall(__jsobject *obj, __jsbuiltin_string_id id, __jsva
 // ecma 8.10.3
 // bool __jsprop_desc_IsGenericDescriptor(__jsprop_desc desc);
 // ecma 8.10.4
-// __jsvalue __jsprop_desc_FromPropertyDescriptor(__jsprop_desc desc);
+// TValue __jsprop_desc_FromPropertyDescriptor(__jsprop_desc desc);
 // ecma 8.10.5
-__jsprop_desc __jsprop_desc_ToPropertyDescriptor(__jsvalue *o);
+__jsprop_desc __jsprop_desc_ToPropertyDescriptor(TValue &o);
 // ecma 8.12.1
 __jsprop_desc __jsobj_internal_GetOwnProperty(__jsobject *o, __jsbuiltin_string_id id);
-__jsprop_desc __jsobj_internal_GetOwnProperty(__jsobject *o, __jsvalue *p);
+__jsprop_desc __jsobj_internal_GetOwnProperty(__jsobject *o, TValue &p);
 // ecma 8.12.2
-__jsprop_desc __jsobj_internal_GetProperty(__jsobject *o, __jsvalue *p);
+__jsprop_desc __jsobj_internal_GetProperty(__jsobject *o, TValue &p);
 __jsprop_desc __jsobj_internal_GetProperty(__jsobject *o, __jsstring *p);
 // ecma 8.12.3
-__jsvalue __jsobj_internal_Get(__jsobject *o, __jsvalue *p);
-__jsvalue __jsobj_internal_Get(__jsobject *o, __jsstring *p);
-__jsvalue __jsobj_internal_Get(__jsobject *o, __jsbuiltin_string_id id);
-__jsvalue __jsobj_internal_Get(__jsobject *o, uint32_t index);
+TValue __jsobj_internal_Get(__jsobject *o, TValue &p);
+TValue __jsobj_internal_Get(__jsobject *o, __jsstring *p);
+TValue __jsobj_internal_Get(__jsobject *o, __jsbuiltin_string_id id);
+TValue __jsobj_internal_Get(__jsobject *o, uint32_t index);
 // ecma 8.12.4
-bool __jsobj_internal_CanPut(__jsobject *o, __jsvalue *p, bool isStrict = false, __jsprop **prop_cache = NULL);
+bool __jsobj_internal_CanPut(__jsobject *o, TValue *p, bool isStrict = false, __jsprop **prop_cache = NULL);
 // ecma 8.12.5
-void __jsobj_internal_Put(__jsobject *o, __jsstring *p, __jsvalue *v, bool throw_p, bool isStrict = false);
-void __jsobj_internal_Put(__jsobject *o, uint32_t index, __jsvalue *v, bool throw_p);
+void __jsobj_internal_Put(__jsobject *o, __jsstring *p, TValue &v, bool throw_p, bool isStrict = false);
+void __jsobj_internal_Put(__jsobject *o, uint32_t index, TValue &v, bool throw_p);
 // ecma 8.12.6
 // ecma 8.12.6
 bool __jsobj_internal_HasProperty(__jsobject *o, __jsstring *p, __jsprop_desc *descp = NULL);
 // ecma 8.12.7
-bool __jsobj_internal_Delete(__jsobject *o, __jsvalue *p, bool mark_as_deleted = false, bool throw_p = false);
+bool __jsobj_internal_Delete(__jsobject *o, TValue &p, bool mark_as_deleted = false, bool throw_p = false);
 bool __jsobj_internal_Delete(__jsobject *o, __jsstring *p, bool mark_as_deleted = false, bool throw_p = false);
 bool __jsobj_internal_Delete(__jsobject *o, uint32_t index, bool mark_as_deleted = false, bool throw_p = false);
 // ecma 8.12.8
-__jsvalue __object_internal_DefaultValue(__jsobject *o, __jstype hint);
+TValue __object_internal_DefaultValue(__jsobject *o, __jstype hint);
 void __jsobj_internal_DefineOwnPropertyByValue(__jsobject *o, uint32_t index, __jsprop_desc desc, bool throw_p);
 // ecma 8.12.9
 void __jsobj_internal_DefineOwnProperty(__jsobject *o, __jsstring *p, __jsprop_desc desc, bool throw_p, __jsprop *prop_cache = NULL);
 void __jsobj_internal_DefineOwnProperty(__jsobject *o, __jsbuiltin_string_id id, __jsprop_desc desc, bool throw_p, __jsprop *prop_cache = NULL);
-void __jsobj_internal_DefineOwnProperty(__jsobject *o, __jsvalue *p, __jsprop_desc desc, bool throw_p, __jsprop *prop_cache = NULL);
+void __jsobj_internal_DefineOwnProperty(__jsobject *o, TValue &p, __jsprop_desc desc, bool throw_p, __jsprop *prop_cache = NULL);
 // ecma 15.2.3.2
-__jsvalue __jsobj_getPrototypeOf(__jsvalue *this_object, __jsvalue *o);
+TValue __jsobj_getPrototypeOf(TValue &this_object, TValue &o);
 // ecma 15.2.3.3
-__jsvalue __jsobj_getOwnPropertyDescriptor(__jsvalue *this_object, __jsvalue *o, __jsvalue *p);
+TValue __jsobj_getOwnPropertyDescriptor(TValue &this_object, TValue &o, TValue &p);
 // ecma 15.2.3.4
-__jsvalue __jsobj_getOwnPropertyNames(__jsvalue *this_object, __jsvalue *o);
+TValue __jsobj_getOwnPropertyNames(TValue &this_object, TValue &o);
 // ecma 15.2.3.5
-__jsvalue __jsobj_create(__jsvalue *this_object, __jsvalue *o, __jsvalue *properties);
+TValue __jsobj_create(TValue &this_object, TValue &o, TValue &properties);
 // ecma 15.2.3.6
-__jsvalue __jsobj_defineProperty(__jsvalue *this_object, __jsvalue *o, __jsvalue *p, __jsvalue *attributes);
+TValue __jsobj_defineProperty(TValue &this_object, TValue &o, TValue &p, TValue &attributes);
 // ecma 15.2.3.7
-__jsvalue __jsobj_defineProperties(__jsvalue *this_object, __jsvalue *o, __jsvalue *properties);
+TValue __jsobj_defineProperties(TValue &this_object, TValue &o, TValue &properties);
 // ecma 15.2.3.8
-__jsvalue __jsobj_seal(__jsvalue *this_object, __jsvalue *o);
+TValue __jsobj_seal(TValue &this_object, TValue &o);
 // ecma 15.2.3.9
-__jsvalue __jsobj_freeze(__jsvalue *this_object, __jsvalue *o);
+TValue __jsobj_freeze(TValue &this_object, TValue &o);
 // ecma 15.2.3.10
-__jsvalue __jsobj_preventExtensions(__jsvalue *this_object, __jsvalue *o);
+TValue __jsobj_preventExtensions(TValue &this_object, TValue &o);
 // ecma 15.2.3.11
-__jsvalue __jsobj_isSealed(__jsvalue *this_object, __jsvalue *o);
+TValue __jsobj_isSealed(TValue &this_object, TValue &o);
 // ecma 15.2.3.12
-__jsvalue __jsobj_isFrozen(__jsvalue *this_object, __jsvalue *o);
+TValue __jsobj_isFrozen(TValue &this_object, TValue &o);
 // ecma 15.2.3.13
-__jsvalue __jsobj_isExtensible(__jsvalue *this_object, __jsvalue *o);
+TValue __jsobj_isExtensible(TValue &this_object, TValue &o);
 // ecma 15.2.3.14
-__jsvalue __jsobj_keys(__jsvalue *this_object, __jsvalue *o);
+TValue __jsobj_keys(TValue &this_object, TValue &o);
 // ecma 15.2.4.2
-__jsvalue __jsobj_pt_toString(__jsvalue *this_object);
+TValue __jsobj_pt_toString(TValue &this_object);
 // ecma 15.2.4.3
-__jsvalue __jsobj_pt_toLocaleString(__jsvalue *this_object);
+TValue __jsobj_pt_toLocaleString(TValue &this_object);
 // ecma 15.2.4.4
-__jsvalue __jsobj_pt_valueOf(__jsvalue *this_object);
+TValue __jsobj_pt_valueOf(TValue &this_object);
 // ecma 15.2.4.5
-__jsvalue __jsobj_pt_hasOwnProperty(__jsvalue *this_object, __jsvalue *v);
+TValue __jsobj_pt_hasOwnProperty(TValue &this_object, TValue &v);
 // ecma 15.2.4.6
-__jsvalue __jsobj_pt_isPrototypeOf(__jsvalue *this_object, __jsvalue *v);
+TValue __jsobj_pt_isPrototypeOf(TValue &this_object, TValue &v);
 // ecma 15.2.4.7
-__jsvalue __jsobj_pt_propertyIsEnumerable(__jsvalue *this_object, __jsvalue *v);
-void __jsop_initprop_by_name(__jsvalue *o, __jsstring *p, __jsvalue *v);
-void __jsop_initprop(__jsvalue *o, __jsvalue *p, __jsvalue *v);
-void __jsop_setprop(__jsvalue *object, __jsvalue *prop_name, __jsvalue *v);
+TValue __jsobj_pt_propertyIsEnumerable(TValue &this_object, TValue &v);
+void __jsop_initprop_by_name(TValue &o, __jsstring *p, TValue &v);
+void __jsop_initprop(TValue &o, TValue &p, TValue &v);
+void __jsop_setprop(TValue &object, TValue &prop_name, TValue &v);
 void __jsop_setprop(maple::TValue &object, maple::TValue &prop_name, maple::TValue &v);
-void __jsop_initprop_getter(__jsvalue *object, __jsvalue *prop_name, __jsvalue *v);
-__jsvalue __jsop_getprop(__jsvalue *object, __jsvalue *prop_name);
-__jsvalue __jsop_getprop(maple::TValue &object, maple::TValue &prop_name);
-__jsvalue __jsop_delprop(__jsvalue *o, __jsvalue *nameIndex, bool throw_p = false);
-__jsvalue __jserror_pt_toString(__jsvalue *this_object);
-__jsvalue __js_rangeerror_pt_toString(__jsvalue *this_object);
-__jsvalue __js_evalerror_pt_toString(__jsvalue *this_object);
-__jsvalue __js_referenceerror_pt_toString(__jsvalue *this_object);
-__jsvalue __js_typeerror_pt_toString(__jsvalue *this_object);
-__jsvalue __js_urierror_pt_toString(__jsvalue *this_object);
-__jsvalue __js_syntaxerror_pt_toString(__jsvalue *this_object);
+void __jsop_initprop_getter(TValue &object, TValue &prop_name, TValue &v);
+TValue __jsop_getprop(TValue *object, TValue *prop_name);
+TValue __jsop_getprop(maple::TValue &object, maple::TValue &prop_name);
+TValue __jsop_delprop(TValue &o, TValue &nameIndex, bool throw_p = false);
+TValue __jserror_pt_toString(TValue &this_object);
+TValue __js_rangeerror_pt_toString(TValue &this_object);
+TValue __js_evalerror_pt_toString(TValue &this_object);
+TValue __js_referenceerror_pt_toString(TValue &this_object);
+TValue __js_typeerror_pt_toString(TValue &this_object);
+TValue __js_urierror_pt_toString(TValue &this_object);
+TValue __js_syntaxerror_pt_toString(TValue &this_object);
 void __jsobj_initprop_fromString(__jsobject *obj, __jsstring *str);
-__jsprop *__jsobj_helper_init_value_propertyByValue(__jsobject *, uint32_t, __jsvalue *, uint32_t);
-__jsvalue __jsobj_GetValueFromPropertyByValue(__jsobject *, uint32_t);
+__jsprop *__jsobj_helper_init_value_propertyByValue(__jsobject *, uint32_t, TValue &, uint32_t);
+TValue __jsobj_GetValueFromPropertyByValue(__jsobject *, uint32_t);
 bool __jsPropertyIsWritable(__jsobject *, uint32_t);
-void __jsconsole_pt_log (__jsvalue *, __jsvalue *);
-__jsvalue __jsobj_internal_get_by_desc(__jsobject *obj, __jsprop_desc desc, __jsvalue *orgVal = NULL);
+void __jsconsole_pt_log (TValue &, TValue &);
+TValue __jsobj_internal_get_by_desc(__jsobject *obj, __jsprop_desc desc, TValue *orgVal = NULL);
 __jsprop_desc __jsobj_internal_GetOwnPropertyByValue(__jsobject *o, uint32_t index);
 #endif

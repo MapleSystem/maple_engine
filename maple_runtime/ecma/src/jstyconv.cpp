@@ -28,10 +28,10 @@
 #include "vmmemory.h"
 
 // ecma 9.1
-__jsvalue __js_ToPrimitive(__jsvalue *v, __jstype preferred_type) {
+TValue __js_ToPrimitive(TValue &v, __jstype preferred_type) {
   // Undefined Null Boolean Number String
   if (__is_primitive(v)) {
-    return *v;
+    return v;
   }
   // Object
   MAPLE_JS_ASSERT(__is_js_object(v));
@@ -39,8 +39,8 @@ __jsvalue __js_ToPrimitive(__jsvalue *v, __jstype preferred_type) {
   return __object_internal_DefaultValue(obj, preferred_type);
 }
 
-__jsvalue __js_ToPrimitive2(__jsvalue *v) {
-  if (v->ptyp == JSTYPE_OBJECT) {
+TValue __js_ToPrimitive2(TValue &v) {
+  if (IS_OBJECT(v.x.u64)) {
     __jsobject *obj = __jsval_to_object(v);
     uint8_t oClass = obj->object_class;
     if (oClass == JSNUMBER || oClass == JSBOOLEAN) {
@@ -64,7 +64,8 @@ __jsvalue __js_ToPrimitive2(__jsvalue *v) {
   return __js_ToPrimitive(v, JSTYPE_UNDEFINED);
 }
 // ecma 9.2
-bool __js_ToBoolean(__jsvalue *v) {
+
+bool __js_ToBoolean(TValue &v) {
   switch (__jsval_typeof(v)) {
     case JSTYPE_NONE:
     case JSTYPE_UNDEFINED:
@@ -87,23 +88,7 @@ bool __js_ToBoolean(__jsvalue *v) {
   return true;
 }
 
-bool __js_ToBoolean(TValue &v) {
-  __jsvalue res;
-  if (IS_NUMBER(v.x.u64))
-    return __jsval_to_number(v) != 0;
-  else if (IS_DOUBLE(v.x.u64))
-    return __jsval_to_double(v) != 0.0;
-  else if (IS_BOOLEAN(v.x.u64))
-    return __jsval_to_boolean(v);
-  else if (IS_STRING(v.x.u64))
-    return __jsstr_get_length(__jsval_to_string(v)) != 0;
-  else if (IS_INFINITY(v.x.u64))
-    return true;
-  else
-    return false;
-}
-
-int32_t __js_ToNumberSlow(__jsvalue *v) {
+int32_t __js_ToNumberSlow(TValue &v) {
   switch (__jsval_typeof(v)) {
     case JSTYPE_UNDEFINED:
     case JSTYPE_NULL:
@@ -116,10 +101,10 @@ int32_t __js_ToNumberSlow(__jsvalue *v) {
       return (int32_t)__js_str2num(__jsval_to_string(v));
       break;
     case JSTYPE_OBJECT: {
-      __jsvalue prim_value = __js_ToPrimitive(v, JSTYPE_NUMBER);
-      GCCheckAndIncRf(prim_value.x.asbits, IsNeedRc(prim_value.ptyp));
-      int32_t num = __js_ToNumber(&prim_value);
-      GCCheckAndDecRf(prim_value.x.asbits, IsNeedRc(prim_value.ptyp));
+      TValue prim_value = __js_ToPrimitive(v, JSTYPE_NUMBER);
+      GCCheckAndIncRf(GET_PAYLOAD(prim_value), IS_NEEDRC(prim_value.x.u64));
+      int32_t num = __js_ToNumber(prim_value);
+      GCCheckAndDecRf(GET_PAYLOAD(prim_value), IS_NEEDRC(prim_value.x.u64));
       return num;
     } break;
     case JSTYPE_DOUBLE: {
@@ -140,7 +125,7 @@ int32_t __js_ToNumberSlow(__jsvalue *v) {
   return 0;
 }
 
-int64_t __js_ToNumberSlow64(__jsvalue *v) {
+int64_t __js_ToNumberSlow64(TValue &v) {
   switch (__jsval_typeof(v)) {
     case JSTYPE_DOUBLE: {
       // ecma 9.5 toInt32 step 3
@@ -157,7 +142,7 @@ int64_t __js_ToNumberSlow64(__jsvalue *v) {
   return 0L;
 }
 
-__jsvalue __js_ToNumberSlow2(__jsvalue *v, bool &isConvertible) {
+TValue __js_ToNumberSlow2(TValue &v, bool &isConvertible) {
   switch (__jsval_typeof(v)) {
     case JSTYPE_UNDEFINED:
     case JSTYPE_NONE:
@@ -167,14 +152,14 @@ __jsvalue __js_ToNumberSlow2(__jsvalue *v, bool &isConvertible) {
     }
     case JSTYPE_BOOLEAN: {
       isConvertible = true;
-      return __number_value(v->x.i32);
+      return __number_value(v.x.i32);
     }
     case JSTYPE_STRING: {
-      __jsvalue jsDv = __js_str2double(__jsval_to_string(v), isConvertible);
+      TValue jsDv = __js_str2double(__jsval_to_string(v), isConvertible);
       if (isConvertible) {
-        if (__is_infinity(&jsDv) || __is_negative_zero(&jsDv) || __is_positive_zero(&jsDv))
+        if (__is_infinity(jsDv) || __is_negative_zero(jsDv) || __is_positive_zero(jsDv))
           return jsDv;
-        double db = __jsval_to_double(&jsDv);
+        double db = __jsval_to_double(jsDv);
         if (__is_double_no_decimal(db) && fabs(db) < (double)0x7fffffff)
           return __number_value(db);
       }
@@ -186,10 +171,10 @@ __jsvalue __js_ToNumberSlow2(__jsvalue *v, bool &isConvertible) {
       if (obj->object_class == JSARRAY)
         return  __nan_value();
 
-      __jsvalue prim_value = __js_ToPrimitive(v, JSTYPE_NUMBER);
-      if (__is_string(&prim_value)) {
-        return __js_ToNumberSlow2(&prim_value, isConvertible);
-      } else if (__is_boolean(&prim_value)) {
+      TValue prim_value = __js_ToPrimitive(v, JSTYPE_NUMBER);
+      if (__is_string(prim_value)) {
+        return __js_ToNumberSlow2(prim_value, isConvertible);
+      } else if (__is_boolean(prim_value)) {
         isConvertible = true;
         return __number_value(prim_value.x.i32);
       } else {
@@ -213,11 +198,11 @@ __jsvalue __js_ToNumberSlow2(__jsvalue *v, bool &isConvertible) {
     }
     case JSTYPE_INFINITY: {
       isConvertible = true;
-      return *v;
+      return v;
     }
     case JSTYPE_NAN: {
       // ecma 9.5 toInt32 step 2
-      return *v;
+      return v;
     }
     default:
       MAPLE_JS_ASSERT(false && "unreachable.");
@@ -280,7 +265,7 @@ __jsstring *__js_DoubleToString(double n) {
   return __jsstr_new_from_char((const char *)(&src));
 }
 
-__jsstring *__js_ToStringSlow(__jsvalue *v) {
+__jsstring *__js_ToStringSlow(TValue &v) {
   switch (__jsval_typeof(v)) {
     case JSTYPE_UNDEFINED:
       return __jsstr_get_builtin(JSBUILTIN_STRING_UNDEFINED);
@@ -292,20 +277,20 @@ __jsstring *__js_ToStringSlow(__jsvalue *v) {
     case JSTYPE_NUMBER:
       return __js_NumberToString(__jsval_to_int32(v));
     case JSTYPE_DOUBLE: {
-      if (v->x.u64 == NEG_ZERO) {
+      if (v.x.u64 == NEG_ZERO) {
         return  __jsstr_get_builtin(JSBUILTIN_STRING_ZERO_CHAR);
       } else {
         return __js_DoubleToString(__jsval_to_double(v));
       }
     }
     case JSTYPE_OBJECT: {
-      __jsvalue prim_value = __js_ToPrimitive(v, JSTYPE_STRING);
-      if (!__is_string(&prim_value)) {
-        GCCheckAndIncRf(prim_value.x.asbits, IsNeedRc(prim_value.ptyp));
+      TValue prim_value = __js_ToPrimitive(v, JSTYPE_STRING);
+      if (!__is_string(prim_value)) {
+        GCCheckAndIncRf(GET_PAYLOAD(prim_value), IS_NEEDRC(prim_value.x.u64));
       }
-      __jsstring *str = __js_ToString(&prim_value);
-      if (!__is_string(&prim_value)) {
-        GCCheckAndDecRf(prim_value.x.asbits, IsNeedRc((prim_value.ptyp)));
+      __jsstring *str = __js_ToString(prim_value);
+      if (!__is_string(prim_value)) {
+        GCCheckAndDecRf(GET_PAYLOAD(prim_value), IS_NEEDRC(prim_value.x.u64));
       }
       return str;
     }
@@ -324,10 +309,11 @@ __jsstring *__js_ToStringSlow(__jsvalue *v) {
 }
 
 // ecma 9.9
-__jsobject *__js_ToObject(__jsvalue *v) {
+/*
+__jsobject *__js_ToObject(TValue &v) {
   if (__is_js_object(v))
     return v->x.obj;
-  __jsvalue res;
+  TValue res;
   switch (__jsval_typeof(v)) {
     case JSTYPE_UNDEFINED:
     case JSTYPE_NULL:
@@ -352,7 +338,7 @@ __jsobject *__js_ToObject(__jsvalue *v) {
   }
   return __jsval_to_object(&res);
 }
-
+*/
 __jsobject *__js_ToObject(TValue &v) {
   if (__is_js_object(v))
     return (__jsobject *)v.x.c.payload;
@@ -372,7 +358,7 @@ __jsobject *__js_ToObject(TValue &v) {
 }
 
 // ecma 9.11
-bool __js_IsCallable(__jsvalue *v) {
+bool __js_IsCallable(TValue &v) {
   // Undefined Null Boolean Number String
   if (__is_primitive(v)) {
     return false;
@@ -386,33 +372,33 @@ bool __js_IsCallable(__jsvalue *v) {
 }
 
 // ecma 9.12
-bool __js_SameValue(__jsvalue *x, __jsvalue *y) {
+bool __js_SameValue(TValue &x, TValue &y) {
   if ((__is_number(x) || __is_boolean(x)) && (__is_number(y) || __is_boolean(y))) {
-    return x->x.i32 == y->x.i32;
+    return x.x.i32 == y.x.i32;
   }
-  if (x->x.asbits == y->x.asbits && x->ptyp == y->ptyp)
+  if (x.x.u64 == y.x.u64)
     return true;
 
-  uint32_t jstyx = x->ptyp;
-  uint32_t jstyy = y->ptyp;
+  uint32_t jstyx = __jsval_typeof(x);
+  uint32_t jstyy = __jsval_typeof(y);
   if (jstyx == JSTYPE_STRING)
     return jstyy == JSTYPE_STRING && __jsstr_equal(__jsval_to_string(x), __jsval_to_string(y));
   if (jstyx == JSTYPE_OBJECT && jstyy == JSTYPE_OBJECT) {
-    if (x->x.obj == y->x.obj) {
+    if (x.x.u64 == y.x.u64) {
         return true;
-    } else if (x->x.obj->object_class == JSFUNCTION && y->x.obj->object_class == JSFUNCTION &&
-        x->x.obj->shared.fun->fp == y->x.obj->shared.fun->fp) {
+    } else if (((__jsobject *)GET_PAYLOAD(x))->object_class == JSFUNCTION && ((__jsobject *)GET_PAYLOAD(y))->object_class == JSFUNCTION &&
+        ((__jsobject *)GET_PAYLOAD(x))->shared.fun->fp == ((__jsobject *)GET_PAYLOAD(y))->shared.fun->fp) {
         return true;
     }
   } else if ((jstyx == JSTYPE_OBJECT && jstyy == JSTYPE_FUNCTION) ||
              (jstyy == JSTYPE_OBJECT && jstyx == JSTYPE_FUNCTION)){
     if (jstyy == JSTYPE_OBJECT) {
-      __jsvalue *t = x;
+      TValue t = x;
       x = y;
       y = t;
     }
-    if (x->x.obj->object_class == JSFUNCTION &&
-      x->x.obj->shared.fun->fp == y->x.ptr) {
+    if (((__jsobject *)GET_PAYLOAD(x))->object_class == JSFUNCTION &&
+      ((__jsobject *)GET_PAYLOAD(x))->shared.fun->fp == (void *)GET_PAYLOAD(y)) {
       return true;
     }
   }
@@ -421,7 +407,7 @@ bool __js_SameValue(__jsvalue *x, __jsvalue *y) {
 
 // ecma6.0 7.1.15 ToLength
 // TODO:: refine ToNumber64 and use ToNumber64
-uint64_t __js_toLength(__jsvalue *v) {
+uint64_t __js_toLength(TValue &v) {
   uint64_t len = 0;
   if (__is_number(v)) {
     int32_t n = __jsval_to_number(v);
@@ -439,19 +425,19 @@ uint64_t __js_toLength(__jsvalue *v) {
   } else if (__is_string(v)) {
     bool convertible = false;
     __jsstring *strlen = __jsval_to_string(v);
-    __jsvalue convertedval = __js_str2double(strlen, convertible);
+    TValue convertedval = __js_str2double(strlen, convertible);
     if (!convertible) return 0; // not a valid number
-    return __js_toLength(&convertedval);
+    return __js_toLength(convertedval);
   } else if (__is_positive_infinity(v)) {
     return MAX_LENGTH_PROPERTY_SIZE;  // 7.1.15 step 5 If len is infinity, return 2^53-1.
   } else if (__is_nan(v) || __is_neg_infinity(v) ||
              __is_undefined(v) || __is_null(v) || __is_none(v)) {
     return 0;       // 7.1.15 step 4. If len ≤ 0, return +0
   } else if (__is_js_object(v)) {
-    __jsvalue prim_value = __js_ToPrimitive(v, JSTYPE_NUMBER);
-    GCCheckAndIncRf(prim_value.x.asbits, IsNeedRc(prim_value.ptyp));
-    len = __js_toLength(&prim_value);
-    GCCheckAndDecRf(prim_value.x.asbits, IsNeedRc(prim_value.ptyp));
+    TValue prim_value = __js_ToPrimitive(v, JSTYPE_NUMBER);
+    GCCheckAndIncRf(GET_PAYLOAD(prim_value), IS_NEEDRC(prim_value.x.u64));
+    len = __js_toLength(prim_value);
+    GCCheckAndDecRf(GET_PAYLOAD(prim_value), IS_NEEDRC(prim_value.x.u64));
     return len;
   } else if (__is_boolean(v)) {
     return __jsval_to_boolean(v) ? 1 : 0;

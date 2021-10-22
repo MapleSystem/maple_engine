@@ -252,22 +252,32 @@ void debugprint(char debug_msg) {
     fclose(fileAddress);
 }
 
+std::string utf16_to_utf8(std::u16string const& s)
+{
+    std::wstring_convert<std::codecvt_utf8_utf16<char16_t, 0x10ffff,
+        std::codecvt_mode::little_endian>, char16_t> cnvt;
+    std::string utf8 = cnvt.to_bytes(s);
+    if(cnvt.converted() < s.size())
+        MAPLE_JS_URIERROR_EXCEPTION();
+        //throw std::runtime_error("invalid conversion");
+    return utf8;
+}
+
+std::u16string utf8_to_utf16(std::string const& utf8)
+{
+    std::wstring_convert<std::codecvt_utf8_utf16<char16_t, 0x10ffff,
+        std::codecvt_mode::little_endian>, char16_t> cnvt;
+    std::u16string s = cnvt.from_bytes(utf8);
+    if(cnvt.converted() < utf8.size())
+        MAPLE_JS_URIERROR_EXCEPTION();
+    return s;
+}
 
 static bool
 Decode(__jsstring *src_js_str, __jsstring *&result, const bool *reservedSet, const bool component )
 {
     // Seems like this system should deal w/a few null cases
     size_t length = __jsstr_get_length(src_js_str);
-    if (length == 0 || 
-       (length == 1 && (strcmp("", src_js_str->x.ascii)==0)) ||
-       (length == 3 && (strcmp("%00", src_js_str->x.ascii)==0))
-       ) {
-        // Return a null string per spec
-        result = __js_new_string_internal(1, true);
-        __jsstr_set_char(result, 0, (uint16_t)0x00);
-        return true;
-    }
-
     mjs_char c;
     bool highByteZero = true;
     bool cvtOk = true;
@@ -278,6 +288,22 @@ Decode(__jsstring *src_js_str, __jsstring *&result, const bool *reservedSet, con
     int n;    // URI escape sequence length
     for (size_t i = 0; i < length; i++) {
         c = __jsstr_get_char(src_js_str, i);
+        if (length == 1 && c > 127 ) { // If already XASCII/unicode char just return it
+            result = __js_new_string_internal(length, true);
+            __jsstr_copy(result, (uint32_t) 0, src_js_str); // Is copying required?
+            return true;
+        } 
+        if (length == 0 || 
+           (length == 1 && (strcmp("", src_js_str->x.ascii)==0)) ||
+           (length == 3 && (strcmp("%00", src_js_str->x.ascii)==0))
+           ) {
+            // Return a null string per spec
+            if(length > 0) length = 1; // NULL string fromCharCode() has 1 length, normally 0
+            result = __js_new_string_internal(length, true);
+            __jsstr_set_char(result, 0, (uint16_t)0x00);
+            return true;
+        } 
+
         if (c == '%') {
             size_t start = i;
             if ((i + 2) >= length)
@@ -290,7 +316,7 @@ Decode(__jsstring *src_js_str, __jsstring *&result, const bool *reservedSet, con
 
               // check for multi byte URI esacpe sequence
               n = 1;
-              while (B & (0x80 >> n))             // count of 4 most sign. bits in 1st byte in sequence = seq. length
+              while (B & (0x80 >> n))   // count of 4 most sign. bits in 1st byte in sequence = seq. length
                   n++;
               if (n == 1 || n > 4)
                   goto report_bad_uri;
@@ -334,6 +360,7 @@ Decode(__jsstring *src_js_str, __jsstring *&result, const bool *reservedSet, con
       cvtOk = false;
       MAPLE_JS_URIERROR_EXCEPTION();
     }
+
     if (cvtOk) {
       for (uint32_t i=0; i<utf16.length(); i++) {
         if (utf16.data()[i] >= 256) {
@@ -343,6 +370,7 @@ Decode(__jsstring *src_js_str, __jsstring *&result, const bool *reservedSet, con
     } else {
       return false;
     }
+
     // allocate and setup return jsstring
     result = __js_new_string_internal(utf16.length(), !highByteZero);
     for (uint32_t i=0; i<utf16.length(); i++) {

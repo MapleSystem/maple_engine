@@ -15,7 +15,7 @@
 
 #include "jsvalueinline.h"
 #include "jsobjectinline.h"
-bool _jsboo_helper_get_boolean(__jsvalue *this_boolean) {
+bool _jsboo_helper_get_boolean(TValue &this_boolean) {
   if (!__is_boolean_object(this_boolean) && !__is_boolean(this_boolean)) {
     MAPLE_JS_TYPEERROR_EXCEPTION();
   }
@@ -30,12 +30,12 @@ bool _jsboo_helper_get_boolean(__jsvalue *this_boolean) {
 }
 
 // ecma 15.6.4.2
-__jsvalue __jsboo_pt_toString(__jsvalue *this_boolean) {
+TValue __jsboo_pt_toString(TValue &this_boolean) {
   bool b = _jsboo_helper_get_boolean(this_boolean);
   return __string_value(__jsstr_get_builtin(b ? JSBUILTIN_STRING_TRUE : JSBUILTIN_STRING_FALSE));
 }
 
 // ecma 15.6.4.3
-__jsvalue __jsboo_pt_valueOf(__jsvalue *this_boolean) {
+TValue __jsboo_pt_valueOf(TValue &this_boolean) {
   return __boolean_value(_jsboo_helper_get_boolean(this_boolean));
 }

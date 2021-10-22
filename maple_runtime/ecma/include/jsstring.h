@@ -17,6 +17,9 @@
 #define JSSTRING_H
 #include "jsvalue.h"
 #include <string>
+
+using namespace maple;
+
 enum __jsbuiltin_string_id {
 #define JSBUILTIN_STRING_DEF(id, length, builtin_string) id,
 #include "jsbuiltinstrings.inc.h"
@@ -75,27 +78,27 @@ void __jsstr_copy_char2string(__jsstring *str, const char *src);
 bool __js_isSpace(uint16_t ch);
 uint16_t *__js_skipSpace(uint16_t *s, uint16_t *end);
 __jsstring *__js_new_string_internal(uint32_t length, bool is_unicode);
-__jsvalue __jsstr_fromCharCode(__jsvalue *this_string, __jsvalue *array, uint32_t size);
-__jsvalue __jsstr_toString(__jsvalue *this_string);
-__jsvalue __jsstr_valueOf(__jsvalue *this_string);
-__jsvalue __jsstr_charAt(__jsvalue *this_string, __jsvalue *idx);
-__jsvalue __jsstr_charCodeAt(__jsvalue *this_string, __jsvalue *idx);
-__jsvalue __jsstr_concat(__jsvalue *this_string, __jsvalue *arr, uint32_t size);
-__jsvalue __jsstr_indexOf(__jsvalue *this_string, __jsvalue *search, __jsvalue *pos);
-__jsvalue __jsstr_lastIndexOf(__jsvalue *this_string, __jsvalue *search, __jsvalue *pos);
-__jsvalue __jsstr_localeCompare(__jsvalue *this_string, __jsvalue *that);
-__jsvalue __jsstr_slice(__jsvalue *this_string, __jsvalue *start, __jsvalue *end);
-__jsvalue __jsstr_substr(__jsvalue *this_string, __jsvalue *start, __jsvalue *end);
-__jsvalue __jsstr_substring(__jsvalue *this_string, __jsvalue *start, __jsvalue *end);
-__jsvalue __jsstr_toLowerCase(__jsvalue *this_string);
-__jsvalue __jsstr_toLocaleLowerCase(__jsvalue *this_string);
-__jsvalue __jsstr_toUpperCase(__jsvalue *this_string);
-__jsvalue __jsstr_toLocaleUpperCase(__jsvalue *this_string);
-__jsvalue __jsstr_trim(__jsvalue *this_string);
-__jsvalue __jsstr_split(__jsvalue *this_string, __jsvalue *separator, __jsvalue *limit);
-__jsvalue __jsstr_match(__jsvalue *this_string, __jsvalue *regexp);
-__jsvalue __jsstr_search(__jsvalue *this_string, __jsvalue *regexp);
-__jsvalue __jsstr_replace(__jsvalue *this_string, __jsvalue *search, __jsvalue *replace);
+TValue __jsstr_fromCharCode(TValue &this_string, TValue *array, uint32_t size);
+TValue __jsstr_toString(TValue &this_string);
+TValue __jsstr_valueOf(TValue &this_string);
+TValue __jsstr_charAt(TValue &this_string, TValue &idx);
+TValue __jsstr_charCodeAt(TValue &this_string, TValue &idx);
+TValue __jsstr_concat(TValue &this_string, TValue *arr, uint32_t size);
+TValue __jsstr_indexOf(TValue &this_string, TValue &search, TValue &pos);
+TValue __jsstr_lastIndexOf(TValue &this_string, TValue &search, TValue &pos);
+TValue __jsstr_localeCompare(TValue &this_string, TValue *args, uint32_t nargs);
+TValue __jsstr_slice(TValue &this_string, TValue &start, TValue &end);
+TValue __jsstr_substr(TValue &this_string, TValue &start, TValue &end);
+TValue __jsstr_substring(TValue &this_string, TValue &start, TValue &end);
+TValue __jsstr_toLowerCase(TValue &this_string);
+TValue __jsstr_toLocaleLowerCase(TValue &this_string);
+TValue __jsstr_toUpperCase(TValue &this_string);
+TValue __jsstr_toLocaleUpperCase(TValue &this_string);
+TValue __jsstr_trim(TValue &this_string);
+TValue __jsstr_split(TValue &this_string, TValue &separator, TValue &limit);
+TValue __jsstr_match(TValue &this_string, TValue &regexp);
+TValue __jsstr_search(TValue &this_string, TValue &regexp);
+TValue __jsstr_replace(TValue &this_string, TValue &search, TValue &replace);
 __jsstring *__jsstr_extract(__jsstring *from, uint32_t from_index, uint32_t length);
 std::wstring __jsstr_to_wstring(__jsstring *s, int offset = 0);
 uint32_t __jsstr_is_number(__jsstring *);

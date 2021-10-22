@@ -15,7 +15,7 @@
 
 #include "jsvalue.h"
 // ecma 15.6.4.2
-__jsvalue __jsboo_pt_toString(__jsvalue *this_boolean);
+TValue __jsboo_pt_toString(TValue &this_boolean);
 
 // ecma 15.6.4.3
-__jsvalue __jsboo_pt_valueOf(__jsvalue *this_boolean);
+TValue __jsboo_pt_valueOf(TValue &this_boolean);

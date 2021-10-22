@@ -16,9 +16,9 @@
 #include "jsmath.h"
 #include "jstycnv.h"
 // 15.8.2.1
-__jsvalue __jsmath_pt_abs(__jsvalue *this_math, __jsvalue *value) {
+TValue __jsmath_pt_abs(TValue &this_math, TValue &value) {
   if (__is_nan(value))
-    return *value;
+    return value;
   if (__is_infinity(value)) {
     return __number_infinity();
   }
@@ -28,7 +28,7 @@ __jsvalue __jsmath_pt_abs(__jsvalue *this_math, __jsvalue *value) {
     double v = __jsval_to_double(value);
     if (v < 0)
       return __double_value(0 - v);
-    return *value;
+    return value;
   }
   MAPLE_JS_ASSERT(__is_number(value));
   int32_t ret = __js_ToInt32(value);
@@ -39,12 +39,12 @@ __jsvalue __jsmath_pt_abs(__jsvalue *this_math, __jsvalue *value) {
 }
 
 // 15.8.2.6
-__jsvalue __jsmath_pt_ceil(__jsvalue *this_math, __jsvalue *value) {
+TValue __jsmath_pt_ceil(TValue &this_math, TValue &value) {
   if (__is_nan(value) || __is_infinity(value))
-    return *value;
+    return value;
   double v = __jsval_to_double(value);
   if (v == 0.0)
-    return *value;
+    return value;
   if (v < 0.0 && v > -1.0)
     return __negative_zero_value();
   double f = ceil(v);
@@ -52,12 +52,12 @@ __jsvalue __jsmath_pt_ceil(__jsvalue *this_math, __jsvalue *value) {
 }
 
 // 15.8.2.9
-__jsvalue __jsmath_pt_floor(__jsvalue *this_math, __jsvalue *value) {
+TValue __jsmath_pt_floor(TValue &this_math, TValue &value) {
   if (__is_nan(value) || __is_infinity(value))
-    return *value;
+    return value;
   double v = __jsval_to_double(value);
   if (v == 0.0)
-    return *value;
+    return value;
   if (v > 0.0 && v < 1.0)
     return __positive_zero_value();
   double f = floor(v);
@@ -65,33 +65,33 @@ __jsvalue __jsmath_pt_floor(__jsvalue *this_math, __jsvalue *value) {
 }
 
 // 15.8.2.11
-__jsvalue __jsmath_pt_max(__jsvalue *this_math, __jsvalue *items, uint32_t size) {
+TValue __jsmath_pt_max(TValue &this_math, TValue *items, uint32_t size) {
   if (size == 0)
     return __number_neg_infinity();
 
-  __jsvalue max_item = __number_neg_infinity();
+  TValue max_item = __number_neg_infinity();
   for (uint32_t i = 0; i < size; i++) {
-    __jsvalue item = items[i];
-    if (__is_js_object(&item)) {
-      item = __js_ToPrimitive(&item, JSTYPE_NUMBER);
+    TValue item = items[i];
+    if (__is_js_object(item)) {
+      item = __js_ToPrimitive(item, JSTYPE_NUMBER);
     }
-    if (__is_nan(&item))
+    if (__is_nan(item))
       return item;
-    if (__is_infinity(&item)) {
+    if (__is_infinity(item)) {
       // -Infinity
-      if (__is_neg_infinity(&item))
+      if (__is_neg_infinity(item))
         continue;
       // +Infinity
       max_item = item;
     } else {
-      if (__is_infinity(&max_item)) {
-        if (__is_neg_infinity(&max_item))
+      if (__is_infinity(max_item)) {
+        if (__is_neg_infinity(max_item))
           max_item = item;
         else
           continue; // max_item is +Infinity, just continue to check if there is any NaN
       } else {
-        double v = __jsval_to_double(&item);
-        if (v > __jsval_to_double(&max_item) || (v == 0.0 && __is_negative_zero(&max_item)))
+        double v = __jsval_to_double(item);
+        if (v > __jsval_to_double(max_item) || (v == 0.0 && __is_negative_zero(max_item)))
           max_item = item;
       }
     }
@@ -100,32 +100,32 @@ __jsvalue __jsmath_pt_max(__jsvalue *this_math, __jsvalue *items, uint32_t size)
 }
 
 // 15.8.2.12
-__jsvalue __jsmath_pt_min(__jsvalue *this_math, __jsvalue *items, uint32_t size) {
+TValue __jsmath_pt_min(TValue &this_math, TValue *items, uint32_t size) {
   if (size == 0)
     return __number_infinity();
 
-  __jsvalue min_item = __number_infinity();
+  TValue min_item = __number_infinity();
   for (uint32_t i = 0; i < size; i++) {
-    __jsvalue item = items[i];
-    if (__is_js_object(&item)) {
-      item = __js_ToPrimitive(&item, JSTYPE_NUMBER);
+    TValue item = items[i];
+    if (__is_js_object(item)) {
+      item = __js_ToPrimitive(item, JSTYPE_NUMBER);
     }
-    if (__is_nan(&item))
+    if (__is_nan(item))
       return item;
-    if (__is_infinity(&item)) {
-      if (__is_neg_infinity(&item)) // -Infinity
+    if (__is_infinity(item)) {
+      if (__is_neg_infinity(item)) // -Infinity
         min_item = item;
       else // +Infinity
         continue;
     } else {
-      if (__is_infinity(&min_item)) {
-        if (__is_neg_infinity(&min_item))
+      if (__is_infinity(min_item)) {
+        if (__is_neg_infinity(min_item))
           continue; // min_item is -Infinity, just continue to check if there is any NaN
         else
           min_item = item;
       } else {
-        double v = __jsval_to_double(&item);
-        if (v < __jsval_to_double(&min_item) || (v == 0.0 && __is_positive_zero(&min_item)))
+        double v = __jsval_to_double(item);
+        if (v < __jsval_to_double(min_item) || (v == 0.0 && __is_positive_zero(min_item)))
           min_item = item;
       }
     }
@@ -134,9 +134,9 @@ __jsvalue __jsmath_pt_min(__jsvalue *this_math, __jsvalue *items, uint32_t size)
 }
 
 // 15.8.2.13
-__jsvalue __jsmath_pt_pow(__jsvalue *this_math, __jsvalue *x, __jsvalue *y) {
+TValue __jsmath_pt_pow(TValue &this_math, TValue &x, TValue &y) {
   if (__is_nan(y) || __is_undefined(y))
-    return *y;
+    return y;
   bool y_is_infinity = false;
   bool y_is_neg_infinity = false;
   double py = 0.0;
@@ -152,7 +152,7 @@ __jsvalue __jsmath_pt_pow(__jsvalue *this_math, __jsvalue *x, __jsvalue *y) {
       return __number_value(1);
   }
   if (__is_nan(x))
-    return *x;
+    return x;
   double px = 0.0;
   if (!__is_infinity(x)) {
     px = __jsval_to_double(x);
@@ -216,7 +216,7 @@ __jsvalue __jsmath_pt_pow(__jsvalue *this_math, __jsvalue *x, __jsvalue *y) {
     if (__is_double_no_decimal(t) && __is_int32_range(t))
       return __number_value((int32_t)t);
     else {
-      __jsvalue jsval;
+      TValue jsval;
       jsval = __double_value(t);
       return jsval;
     }
@@ -224,12 +224,12 @@ __jsvalue __jsmath_pt_pow(__jsvalue *this_math, __jsvalue *x, __jsvalue *y) {
 }
 
 // 15.8.2.15
-__jsvalue __jsmath_pt_round(__jsvalue *this_math, __jsvalue *value) {
+TValue __jsmath_pt_round(TValue &this_math, TValue &value) {
   if (__is_nan(value) || __is_infinity(value))
-    return *value;
+    return value;
   double v = __jsval_to_double(value);
   if (v == 0.0)
-    return *value;
+    return value;
   if (v > 0.0 && v < 0.5)
       return __positive_zero_value();
   if (v < 0.0 && v >= -0.5)
@@ -244,17 +244,17 @@ __jsvalue __jsmath_pt_round(__jsvalue *this_math, __jsvalue *value) {
 }
 
 // 15.8.2.17
-__jsvalue __jsmath_pt_sqrt(__jsvalue *this_math, __jsvalue *value) {
+TValue __jsmath_pt_sqrt(TValue &this_math, TValue &value) {
   if (__is_nan(value))
-    return *value;
+    return value;
   if (__is_infinity(value)) {
     if (__is_neg_infinity(value))
       return __nan_value();
-    return *value;
+    return value;
   }
   double v = __jsval_to_double(value);
   if (v == 0.0)
-    return *value;
+    return value;
   if (v < 0.0)
     return __nan_value();
   double f = sqrt(v);
@@ -262,23 +262,23 @@ __jsvalue __jsmath_pt_sqrt(__jsvalue *this_math, __jsvalue *value) {
 }
 
 // 15.8.2.16
-__jsvalue __jsmath_pt_sin(__jsvalue *this_math, __jsvalue *value) {
+TValue __jsmath_pt_sin(TValue &this_math, TValue &value) {
   if (__is_nan(value) || __is_undefined(value))
-    return *value;
+    return value;
   if (__is_infinity(value))
     return __nan_value();
   double v = __jsval_to_double(value);
   double f = sin(v);
   if (f == 0.0)
-   return *value;
+   return value;
   else
    return __double_value(f);
 }
 
 // 15.8.2.3
-__jsvalue __jsmath_pt_asin(__jsvalue *this_math, __jsvalue *value) {
+TValue __jsmath_pt_asin(TValue &this_math, TValue &value) {
   if (__is_nan(value) || __is_undefined(value))
-    return *value;
+    return value;
   if (__is_infinity(value)) {
     return __nan_value();
   }
@@ -287,15 +287,15 @@ __jsvalue __jsmath_pt_asin(__jsvalue *this_math, __jsvalue *value) {
     return __nan_value();
   double f = asin(v);
   if (f == 0.0)
-   return *value;
+   return value;
   else
    return __double_value(f);
 }
 
 // 15.8.2.7
-__jsvalue __jsmath_pt_cos(__jsvalue *this_math, __jsvalue *value) {
+TValue __jsmath_pt_cos(TValue &this_math, TValue &value) {
   if (__is_nan(value) || __is_undefined(value))
-    return *value;
+    return value;
   if (__is_infinity(value))
     return __nan_value();
   double v = __jsval_to_double(value);
@@ -304,9 +304,9 @@ __jsvalue __jsmath_pt_cos(__jsvalue *this_math, __jsvalue *value) {
 }
 
 // 15.8.2.2
-__jsvalue __jsmath_pt_acos(__jsvalue *this_math, __jsvalue *value) {
+TValue __jsmath_pt_acos(TValue &this_math, TValue &value) {
   if (__is_nan(value) || __is_undefined(value))
-    return *value;
+    return value;
   if (__is_infinity(value)) {
     return __nan_value();
   }
@@ -318,22 +318,22 @@ __jsvalue __jsmath_pt_acos(__jsvalue *this_math, __jsvalue *value) {
 }
 
 // 15.8.2.18
-__jsvalue __jsmath_pt_tan(__jsvalue *this_math, __jsvalue *value) {
+TValue __jsmath_pt_tan(TValue &this_math, TValue &value) {
   if (__is_nan(value) || __is_undefined(value))
-    return *value;
+    return value;
   if (__is_infinity(value))
     return __nan_value();
   double v = __jsval_to_double(value);
   if (v == 0.0)
-   return *value;
+   return value;
   double f = tan(v);
   return __double_value(f);
 }
 
 // 15.8.2.4
-__jsvalue __jsmath_pt_atan(__jsvalue *this_math, __jsvalue *value) {
+TValue __jsmath_pt_atan(TValue &this_math, TValue &value) {
   if (__is_nan(value) || __is_undefined(value))
-    return *value;
+    return value;
   if (__is_infinity(value)) {
     if (__is_neg_infinity(value))
       return __double_value(-MathPi/2.0);
@@ -341,17 +341,17 @@ __jsvalue __jsmath_pt_atan(__jsvalue *this_math, __jsvalue *value) {
   }
   double v = __jsval_to_double(value);
   if (v == 0.0)
-   return *value;
+   return value;
   double f = atan(v);
   return __double_value(f);
 }
 
 // 15.8.2.5
-__jsvalue __jsmath_pt_atan2(__jsvalue *this_math, __jsvalue *y, __jsvalue *x) {
+TValue __jsmath_pt_atan2(TValue &this_math, TValue &y, TValue &x) {
   if (__is_nan(y) || __is_undefined(y))
-    return *y;
+    return y;
   if (__is_nan(x)|| __is_undefined(x))
-    return *x;
+    return x;
   if (__is_infinity(y)) {
     // y = -infinity
     if (__is_neg_infinity(y)) {
@@ -420,13 +420,13 @@ __jsvalue __jsmath_pt_atan2(__jsvalue *this_math, __jsvalue *y, __jsvalue *x) {
 }
 
 // 15.8.2.10
-__jsvalue __jsmath_pt_log(__jsvalue *this_math, __jsvalue *value) {
+TValue __jsmath_pt_log(TValue &this_math, TValue &value) {
   if (__is_nan(value) || __is_undefined(value))
-    return *value;
+    return value;
   if (__is_infinity(value)) {
     if (__is_neg_infinity(value))
       return __nan_value();
-    return *value;
+    return value;
   }
   double v = __jsval_to_double(value);
   if (v < 0.0)
@@ -438,13 +438,13 @@ __jsvalue __jsmath_pt_log(__jsvalue *this_math, __jsvalue *value) {
 }
 
 // 15.8.2.8
-__jsvalue __jsmath_pt_exp(__jsvalue *this_math, __jsvalue *value) {
+TValue __jsmath_pt_exp(TValue &this_math, TValue &value) {
   if (__is_nan(value) || __is_undefined(value))
-    return *value;
+    return value;
   if (__is_infinity(value)) {
     if (__is_neg_infinity(value))
       return __number_value(0);
-    return *value;
+    return value;
   }
   double v = __jsval_to_double(value);
   double f = exp(v);
@@ -452,6 +452,6 @@ __jsvalue __jsmath_pt_exp(__jsvalue *this_math, __jsvalue *value) {
 }
 
 // 15.8.2.14
-__jsvalue __jsmath_pt_random(__jsvalue *this_math) {
+TValue __jsmath_pt_random(TValue &this_math) {
   return __double_value(drand48());
 }

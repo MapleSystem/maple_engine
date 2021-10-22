@@ -19,12 +19,12 @@
 #include "jsnum.h"
 #include "jsstring.h"
 #include "jsfunction.h"
-__jsvalue __jsop_call(__jsvalue *function, __jsvalue *this_arg, __jsvalue *arg_list, uint32_t arg_count) {
+TValue __jsop_call(TValue &function, TValue &this_arg, TValue *arg_list, uint32_t arg_count) {
   return __jsfun_val_call(function, this_arg, arg_list, arg_count);
 }
 
 // ecma 11.2.2 The new Operator
-__jsvalue __jsop_new(__jsvalue *constructor, __jsvalue *this_arg, __jsvalue *arg_list, uint32_t nargs) {
+TValue __jsop_new(TValue &constructor, TValue this_arg, TValue *arg_list, uint32_t nargs) {
   if (!__is_js_object(constructor) || !__is_js_function(constructor)) {
     MAPLE_JS_TYPEERROR_EXCEPTION();
   }

@@ -249,16 +249,18 @@ void MemoryManager::SetF64Builtin() {
   f64ToU32Vec.push_back(NumberMinValue);
 }
 
-__jsvalue MemoryManager::GetF64Builtin(uint32_t index) {
+#if 0
+TValue MemoryManager::GetF64Builtin(uint32_t index) {
   assert(index <= MATH_LAST_INDEX && "error");
   if (f64ToU32Vec.size() == 0) {
     SetF64Builtin();
   }
-  __jsvalue jsval;
+  TValue jsval;
   jsval.ptyp = JSTYPE_DOUBLE;
   jsval.x.u32 = index;
   return jsval;
 }
+#endif
 
 double MemoryManager::GetF64FromU32 (uint32 index) {
   assert(index < f64ToU32Vec.size() && "false");
@@ -889,13 +891,13 @@ void MemoryManager::RecallString(__jsstring *str) {
         // RecallMem((void *)str, sizeof(__jsstring));
 }
 
-void MemoryManager::RecallArray_props(__jsvalue *array_props) {
+void MemoryManager::RecallArray_props(TValue *array_props) {
   if (TurnoffGC())
     return;
-  uint32_t length = __jsval_to_uint32(&array_props[0]);
+  uint32_t length = __jsval_to_uint32(array_props[0]);
   length = length > ARRAY_MAXINDEXNUM_INTERNAL ? ARRAY_MAXINDEXNUM_INTERNAL : length;
   for (uint32_t i = 0; i < length + 1; i++) {
-    if (__is_js_object(&array_props[i]) || __is_string(&array_props[i])) {
+    if (__is_js_object(array_props[i]) || __is_string(array_props[i])) {
 // #ifndef RC_NO_MMAP
 #if  0
       AddrMap *mmap = ginterpreter->GetHeapRefList();
@@ -904,13 +906,13 @@ void MemoryManager::RecallArray_props(__jsvalue *array_props) {
       mmap->RemoveAddrMapNode(mmap_node);
 #endif
 #if MACHINE64
-      GCDecRf((array_props[i].x.ptr));
+      GCDecRf((void *)GET_PAYLOAD(array_props[i]));
 #else
       GCDecRf(array_props[i].x.payload.ptr);
 #endif
     }
   }
-  RecallMem((void *)array_props, (length + 1) * sizeof(__jsvalue));
+  RecallMem((void *)array_props, (length + 1) * sizeof(TValue));
 }
 
 void MemoryManager::RecallList(__json_list *list) {
@@ -919,7 +921,7 @@ void MemoryManager::RecallList(__json_list *list) {
   uint32_t count = list->count;
   __json_node *node = list->first;
   for (uint32_t i = 0; i < count; i++) {
-    GCCheckAndDecRf(node->value.x.asbits, IsNeedRc((node->value.ptyp)));
+    GCCheckAndDecRf(GET_PAYLOAD(node->value), IS_NEEDRC(node->value.x.u64));
     VMFreeNOGC(node, sizeof(__json_node));
     node = node->next;
   }
@@ -1175,8 +1177,8 @@ void MemoryManager::ManageChildObj(__jsobject *obj, ManageType flag) {
   } else if (flag == SCAN) { // parent just maked blue
     if (GetMemHeader(obj).color == CRC_RED) { // SCAN only applies to red nodes
       if (GetMemHeader(obj).refcount > 0) { // this node must have external references; turn green
-        ManageObject(obj, SCAN_GREEN); // continue with SCAN_GREEN for children
         GetMemHeader(obj).color = CRC_GREEN;
+        ManageObject(obj, SCAN_GREEN); // continue with SCAN_GREEN for children
       } else { // RC=0; this is a garbage node
         GetMemHeader(obj).color = CRC_BLUE;
         ManageObject(obj, SCAN); // continue wth SCAN for children
@@ -1221,22 +1223,22 @@ void MemoryManager::ManageChildObj(__jsobject *obj, ManageType flag) {
   }
 }
 
-void MemoryManager::ManageJsvalue(__jsvalue *val, ManageType flag) {
+void MemoryManager::ManageJsvalue(TValue &val, ManageType flag) {
   if (flag == SWEEP || is_sweep) {
     // if the val is an object, then do nothing
     if (__is_string(val)) {
 #ifdef MACHINE64
-      GCDecRf((val->x.ptr));
+      GCDecRf((void *)GET_PAYLOAD(val));
 #else
       GCDecRf(val->x.ptr);
 #endif
     }
   } else if (flag == RECALL) {
-    GCCheckAndDecRf(val->x.asbits, IsNeedRc(val->ptyp));
+    GCCheckAndDecRf(GET_PAYLOAD(val), IS_NEEDRC(val.x.u64));
   } else {
     if (__is_js_object(val)) {
 #ifdef MACHINE64
-      ManageChildObj((val->x.obj), flag);
+      ManageChildObj((__jsobject *)GET_PAYLOAD(val), flag);
 #else
       ManageChildObj(val->x.obj, flag);
 #endif
@@ -1304,7 +1306,7 @@ void MemoryManager::ManageEnvironment(void *envptr, ManageType flag) {
   uint32 argnums = u32envptr[0];
   uint32 totalsize = sizeof(uint32) + sizeof(void *);  // basic size
   for (uint32 i = 1; i <= argnums; i++) {
-    __jsvalue val = MvalToJsval(mvalptr[i]);
+    TValue val = MvalToJsval(mvalptr[i]);
     ManageJsvalue(&val, flag);
     totalsize += sizeof(Mval);
   }
@@ -1317,8 +1319,8 @@ void MemoryManager::ManageEnvironment(void *envptr, ManageType flag) {
 void MemoryManager::ManageProp(__jsprop *prop, ManageType flag) {
   __jsprop_desc desc = prop->desc;
   if (__has_value(desc)) {
-    __jsvalue jsvalue = __get_value(desc);
-    ManageJsvalue(&jsvalue, flag);
+    TValue jsvalue = __get_value(desc);
+    ManageJsvalue(jsvalue, flag);
   }
   if (__has_set(desc)) {
     ManageChildObj(__get_set(desc), flag);
@@ -1354,14 +1356,14 @@ void MemoryManager::ManageObject(__jsobject *obj, ManageType flag) {
       break;
     case JSARRAY:
       if (obj->object_type == JSREGULAR_ARRAY) {
-        __jsvalue *array = obj->shared.array_props;
-        uint32 arrlen = (uint32_t)__jsval_to_number(&array[0]);
+        TValue *array = obj->shared.array_props;
+        uint32 arrlen = (uint32_t)__jsval_to_number(array[0]);
         for (uint32_t i = 0; i < arrlen; i++) {
-          __jsvalue jsvalue = obj->shared.array_props[i + 1];
-          ManageJsvalue(&jsvalue, flag);
+          TValue jsvalue = obj->shared.array_props[i + 1];
+          ManageJsvalue(jsvalue, flag);
         }
         if (flag == SWEEP || flag == RECALL) {
-          uint32_t size = (arrlen + 1) * sizeof(__jsvalue);
+          uint32_t size = (arrlen + 1) * sizeof(TValue);
           RecallMem((void *)obj->shared.array_props, size);
         }
       }
@@ -1374,14 +1376,14 @@ void MemoryManager::ManageObject(__jsobject *obj, ManageType flag) {
         if (fun->attrs & JSFUNCPROP_BOUND) {
           ManageChildObj((__jsobject *)(fun->fp), flag);
           uint32_t bound_argc = ((fun->attrs >> 16) & 0xff);
-          __jsvalue *bound_args = (__jsvalue *)fun->env;
+          TValue *bound_args = (TValue *)fun->env;
           for (uint32_t i = 0; i < bound_argc; i++) {
-            __jsvalue val = bound_args[i];
-            ManageJsvalue(&val, flag);
+            TValue val = bound_args[i];
+            ManageJsvalue(val, flag);
           }
           if (flag == SWEEP || flag == RECALL) {
             if (fun->env != nullptr)
-              RecallMem(fun->env, bound_argc * sizeof(__jsvalue));
+              RecallMem(fun->env, bound_argc * sizeof(TValue));
           }
         } else {
           if ((flag != SWEEP) && (flag != RECALL)) {
@@ -1397,7 +1399,7 @@ void MemoryManager::ManageObject(__jsobject *obj, ManageType flag) {
       break;
     case JSARRAYBUFFER: {
       __jsarraybyte *arrayByte = obj->shared.arrayByte;
-      RecallMem((void *)arrayByte, sizeof(uint8_t) * __jsval_to_number(&arrayByte->length));
+      RecallMem((void *)arrayByte, sizeof(uint8_t) * __jsval_to_number(arrayByte->length));
     }
     break;
     case JSDATAVIEW:
@@ -1460,6 +1462,7 @@ void MemoryManager::ResetCycleRoots() {
 
 #ifdef MM_DEBUG
 void MemoryManager::DumpClosures() {
+  const char* CRCColorName [] = {"GRN", "RED", "BLU"};
   printf("Closures:\n");
   CycleRoot *root = cycle_roots;
   while (root) {
@@ -1470,7 +1473,8 @@ void MemoryManager::DumpClosures() {
       ManageObject(root->obj, CLOSURE);
       // dump closure
       for (auto a : crc_closure) {
-        printf("%p (color= %d rc= %d) ", a, (int)GetMemHeader(a).color, (int)GetMemHeader(a).refcount);
+        // printf("%p (color= %d rc= %d) ", a, (int)GetMemHeader(a).color, (int)GetMemHeader(a).refcount);
+        printf("%p (color= %s rc= %d) ", a, CRCColorName[(int)GetMemHeader(a).color], (int)GetMemHeader(a).refcount);
         GetMemHeader(a).visited = false;
       }
       printf("\n");
@@ -1486,34 +1490,39 @@ void MemoryManager::RecallCycle() {
     return;
   }
 
-  for (auto a : crc_candidate_roots)
-    AddCycleRootNode(&cycle_roots, (__jsobject*)a);
+#ifdef MM_DEBUG
+  // for (auto a : crc_candidate_roots)
+    // printf("candidate: %p rc= %d\n", (void*)a, (int)GetMemHeader(a).refcount);
+int num_roots = 0;
+#endif
+  for (auto a : crc_candidate_roots) {
+    if (GetMemHeader(a).refcount > 0) { // if RC=0, it's garbage already
+      AddCycleRootNode(&cycle_roots, (__jsobject*)a);
+#ifdef MM_DEBUG
+      num_roots++;
+#endif
+    }
+  }
   crc_candidate_roots.clear();
 
-/*
   if (!cycle_roots) {
     return;
   }
-*/
 
   // Step 1: mark red transitive closure of root. All nodes in the closure are marked red.
   // In the process, whenever a node is visited its RC is decreased.
+#ifdef MM_DEBUG
+  printf("In RecallCycle, num of candidates= %d\n", num_roots);
+  printf("##### step 1: mark red all nodes in transitive closure\n");
+#endif
   CycleRoot *root = cycle_roots;
-#ifdef MM_DEBUG
-  int cnt1 = 0;
-  int cnt2 = 0;
-#endif
   while (root) {
-#ifdef MM_DEBUG
-    cnt1++;
-#endif
+#if 0
     if (GetMemHeader(root->obj).refcount == 0) { // if RC=0, it's garbage
-#ifdef MM_DEBUG
-      cnt2++;
-#endif
-      // todo: when object becomes garbage, it is recalled. What's the implication?
       DeleteCycleRootNode(root);
-    } else {
+    } else
+#endif
+    {
       if (GetMemHeader(root->obj).color != CRC_RED) {
         GetMemHeader(root->obj).color = CRC_RED;
         ManageObject(root->obj, MARK_RED);
@@ -1523,8 +1532,8 @@ void MemoryManager::RecallCycle() {
   }
 
 #ifdef MM_DEBUG
-  printf("In RecallCycle, total %d candidates, garbage= %d, rest= %d\n", cnt1, cnt2, cnt1-cnt2);
   // DumpClosures();
+  printf("##### step 2: mark nodes blue or green\n");
 #endif
 
   // Step 2 scan the closure and distinguish live and dead nodes. If a red node's RC=0,
@@ -1607,7 +1616,7 @@ void MemoryManager::ManageChildObj(__jsobject *obj, ManageType flag) {
   }
 }
 
-void MemoryManager::ManageJsvalue(__jsvalue *val, ManageType flag) {
+void MemoryManager::ManageJsvalue(TValue *val, ManageType flag) {
   if (flag == MARK || flag == DECRF) {
     if (__is_js_object(val)) {
 #ifdef MACHINE64
@@ -1663,7 +1672,7 @@ void MemoryManager::ManageEnvironment(void *envptr, ManageType flag) {
   uint32 argnums = u32envptr[0];
   uint32 totalsize = sizeof(uint32) + sizeof(void *);  // basic size
   for (uint32 i = 1; i <= argnums; i++) {
-    __jsvalue val = MvalToJsval(mvalptr[i]);
+    TValue val = MvalToJsval(mvalptr[i]);
     ManageJsvalue(&val, flag);
     totalsize += sizeof(Mval);
   }
@@ -1676,7 +1685,7 @@ void MemoryManager::ManageEnvironment(void *envptr, ManageType flag) {
 void MemoryManager::ManageProp(__jsprop *prop, ManageType flag) {
   __jsprop_desc desc = prop->desc;
   if (__has_value(desc)) {
-    __jsvalue jsvalue = __get_value(desc);
+    TValue jsvalue = __get_value(desc);
     ManageJsvalue(&jsvalue, flag);
   }
   if (__has_set(desc)) {
@@ -1722,14 +1731,14 @@ void MemoryManager::ManageObject(__jsobject *obj, ManageType flag) {
     case JSARRAY:
       /*TODO : Be related to VMReallocGC, AddrMapNode information will miss after VMReallocGC.  */
       if (obj->object_type == JSREGULAR_ARRAY) {
-        __jsvalue *array = obj->shared.array_props;
+        TValue *array = obj->shared.array_props;
         uint32 arrlen = (uint32_t)__jsval_to_number(&array[0]);
         for (uint32_t i = 0; i < arrlen; i++) {
-          __jsvalue jsvalue = obj->shared.array_props[i + 1];
+          TValue jsvalue = obj->shared.array_props[i + 1];
           ManageJsvalue(&jsvalue, flag);
         }
         if (flag == RECALL || flag == SWEEP) {
-          uint32_t size = (arrlen + 1) * sizeof(__jsvalue);
+          uint32_t size = (arrlen + 1) * sizeof(TValue);
           RecallMem((void *)obj->shared.array_props, size);
         }
       }
@@ -1742,13 +1751,13 @@ void MemoryManager::ManageObject(__jsobject *obj, ManageType flag) {
         if (fun->attrs & JSFUNCPROP_BOUND) {
           ManageChildObj((__jsobject *)(fun->fp), flag);
           uint32_t bound_argc = ((fun->attrs >> 16) & 0xff);
-          __jsvalue *bound_args = (__jsvalue *)fun->env;
+          TValue *bound_args = (TValue *)fun->env;
           for (uint32_t i = 0; i < bound_argc; i++) {
-            __jsvalue val = bound_args[i];
+            TValue val = bound_args[i];
             ManageJsvalue(&val, flag);
           }
           if ((flag == RECALL || flag == SWEEP) && bound_argc > 0) {
-            RecallMem(fun->env, bound_argc * sizeof(__jsvalue));
+            RecallMem(fun->env, bound_argc * sizeof(TValue));
           }
         } else {
           if (flag == MARK || flag == DECRF) {
@@ -1778,7 +1787,7 @@ void MemoryManager::ManageObject(__jsobject *obj, ManageType flag) {
   }
 }
 
-bool MemoryManager::NotMarkedObject(__jsvalue *val) {
+bool MemoryManager::NotMarkedObject(TValue *val) {
   bool not_marked_obj = true;
   if (__is_js_object(val)) {
 #ifdef MACHINE64

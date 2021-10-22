@@ -159,8 +159,8 @@ namespace maple {
     };
 
     MValue maple_invoke_method(const method_header_t* const mir_header, const MFunction *caller);
-    MValue maple_invoke_dynamic_method(DynamicMethodHeaderT* cheader, void *);
-    MValue maple_invoke_dynamic_method_main(uint8_t *mPC, DynamicMethodHeaderT* cheader);
+    TValue maple_invoke_dynamic_method(DynamicMethodHeaderT* cheader, void *);
+    TValue maple_invoke_dynamic_method_main(uint8_t *mPC, DynamicMethodHeaderT* cheader);
 
 }
 #endif // MAPLERE_MFUNCTION_H_

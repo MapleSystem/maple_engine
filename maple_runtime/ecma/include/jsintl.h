@@ -25,94 +25,94 @@
 static const size_t INITIAL_STRING_BUFFER_SIZE = 32;
 
 // Helper
-__jsvalue StrToVal(std::string str);
-__jsvalue StrVecToVal(std::vector<std::string> strs);
-std::string ValToStr(__jsvalue *value);
-std::vector<std::string> VecValToVecStr(__jsvalue *value);
+TValue StrToVal(std::string str);
+TValue StrVecToVal(std::vector<std::string> strs);
+std::string ValToStr(TValue &value);
+std::vector<std::string> VecValToVecStr(TValue &value);
 
 // Constructor
-__jsvalue __js_IntlConstructor(__jsvalue *this_arg, __jsvalue *arg_list,
+TValue __js_IntlConstructor(TValue &this_arg, TValue *arg_list,
                                uint32_t nargs);
-__jsvalue __js_CollatorConstructor(__jsvalue *this_arg, __jsvalue *arg_list,
+TValue __js_CollatorConstructor(TValue &this_arg, TValue *arg_list,
                                    uint32_t nargs);
-__jsvalue __js_NumberFormatConstructor(__jsvalue *this_arg, __jsvalue *arg_list,
+TValue __js_NumberFormatConstructor(TValue &this_arg, TValue *arg_list,
                                        uint32_t nargs);
-__jsvalue __js_DateTimeFormatConstructor(__jsvalue *this_arg,
-                                         __jsvalue *arg_list, uint32_t nargs);
+TValue __js_DateTimeFormatConstructor(TValue &this_arg,
+                                         TValue *arg_list, uint32_t nargs);
 
 // Common
-__jsvalue CanonicalizeLanguageTag(__jsstring *tag);
-__jsvalue CanonicalizeLocaleList(__jsvalue *locales);
+TValue CanonicalizeLanguageTag(__jsstring *tag);
+TValue CanonicalizeLocaleList(TValue &locales);
 bool IsStructurallyValidLanguageTag(__jsstring *locale);
-bool IsWellFormedCurrencyCode(__jsvalue *currency);
-__jsvalue BestAvailableLocale(__jsvalue *available_locales, __jsvalue *locale);
-__jsvalue LookupMatcher(__jsvalue *available_locales, __jsvalue *requested_locales);
-__jsvalue BestFitMatcher(__jsvalue *available_locales, __jsvalue *requested_locales);
-__jsvalue ResolveLocale(__jsvalue *available_locales, __jsvalue *requested_locales,
-                        __jsvalue *options, __jsvalue *relevant_extension_keys,
-                        __jsvalue *locale_data);
-__jsvalue LookupSupportedLocales(__jsvalue *available_locales,
-                                __jsvalue *requested_locales);
-__jsvalue BestFitSupportedLocales(__jsvalue *available_locales,
-                                  __jsvalue *requested_locales);
-__jsvalue SupportedLocales(__jsvalue *available_locales,
-                           __jsvalue *requested_locales, __jsvalue *options);
-__jsvalue GetOption(__jsvalue *options, __jsvalue *property, __jsvalue *type,
-                    __jsvalue *values, __jsvalue *fallback);
-__jsvalue GetNumberOption(__jsvalue *options, __jsvalue *property,
-                          __jsvalue *minimum, __jsvalue *maximum,
-                          __jsvalue *fallback);
-__jsvalue DefaultLocale();
-__jsvalue GetAvailableLocales();
+bool IsWellFormedCurrencyCode(TValue &currency);
+TValue BestAvailableLocale(TValue &available_locales, TValue &locale);
+TValue LookupMatcher(TValue &available_locales, TValue &requested_locales);
+TValue BestFitMatcher(TValue &available_locales, TValue &requested_locales);
+TValue ResolveLocale(TValue &available_locales, TValue &requested_locales,
+                        TValue &options, TValue &relevant_extension_keys,
+                        TValue &locale_data);
+TValue LookupSupportedLocales(TValue &available_locales,
+                                TValue &requested_locales);
+TValue BestFitSupportedLocales(TValue &available_locales,
+                                  TValue &requested_locales);
+TValue SupportedLocales(TValue &available_locales,
+                           TValue &requested_locales, TValue &options);
+TValue GetOption(TValue &options, TValue &property, TValue &type,
+                    TValue &values, TValue &fallback);
+TValue GetNumberOption(TValue &options, TValue &property,
+                          TValue &minimum, TValue &maximum,
+                          TValue &fallback);
+TValue DefaultLocale();
+TValue GetAvailableLocales();
 std::vector<std::string> GetNumberingSystems();
 const char* ToICULocale(std::string& locale);
 
 
 // NumberFormat
-void InitializeNumberFormat(__jsvalue *number_format, __jsvalue *locales,
-                            __jsvalue *options);
-void InitializeNumberFormatProperties(__jsvalue *number_format, __jsvalue *locales,
+void InitializeNumberFormat(TValue &number_format, TValue &locales,
+                            TValue &options);
+void InitializeNumberFormatProperties(TValue &number_format, TValue &locales,
                                      std::vector<std::string> properties);
-__jsvalue CurrencyDigits(__jsvalue *currency);
-__jsvalue __jsintl_NumberFormatSupportedLocalesOf(__jsvalue *this_arg,
-                                                  __jsvalue *arg_list,
+TValue CurrencyDigits(TValue &currency);
+TValue __jsintl_NumberFormatSupportedLocalesOf(TValue &this_arg,
+                                                  TValue *arg_list,
                                                   uint32_t nargs);
-__jsvalue __jsintl_NumberFormatFormat(__jsvalue *number_format, __jsvalue *value);
-__jsvalue __jsintl_NumberFormatResolvedOptions(__jsvalue *number_format);
-__jsvalue ToDateTimeOptions(__jsvalue *options, __jsvalue *required, __jsvalue *defaults);
-__jsvalue BasicFormatMatcher(__jsvalue *options, __jsvalue *formats);
-__jsvalue BestFitFormatMatcher(__jsvalue *options, __jsvalue *formats);
-__jsvalue FormatNumber(__jsvalue *number_format, __jsvalue *x);
-__jsvalue ToRawPrecision(__jsvalue *x, __jsvalue *min_sd, __jsvalue *max_sd);
-__jsvalue ToRawFixed(__jsvalue *x, __jsvalue *min_integer,
-                     __jsvalue *min_fraction,__jsvalue *max_fraction);
+TValue __jsintl_NumberFormatFormat(TValue &number_format, TValue &value);
+TValue __jsintl_NumberFormatResolvedOptions(TValue &number_format);
+TValue ToDateTimeOptions(TValue &options, TValue &required, TValue &defaults);
+TValue BasicFormatMatcher(TValue &options, TValue &formats);
+TValue BestFitFormatMatcher(TValue &options, TValue &formats);
+TValue FormatNumber(TValue &number_format, TValue &x);
+TValue ToRawPrecision(TValue &x, TValue &min_sd, TValue &max_sd);
+TValue ToRawFixed(TValue &x, TValue &min_integer,
+                     TValue &min_fraction,TValue &max_fraction);
 
 // Collator
-void InitializeCollator(__jsvalue *collator, __jsvalue *locales, __jsvalue *options);
-void InitializeCollatorProperties(__jsvalue *collator, __jsvalue *locales, std::vector<std::string> propertie);
-__jsvalue __jsintl_CollatorSupportedLocalesOf(__jsvalue *this_arg,
-                                              __jsvalue *arg_list,
+void InitializeCollator(TValue &collator, TValue &locales, TValue &options);
+void InitializeCollatorProperties(TValue &collator, TValue &locales, std::vector<std::string> propertie);
+TValue __jsintl_CollatorSupportedLocalesOf(TValue &this_arg,
+                                              TValue *arg_list,
                                               uint32_t nargs);
-__jsvalue __jsintl_CollatorCompare(__jsvalue *this_collator, __jsvalue *x, __jsvalue *y);
-__jsvalue CompareStrings(__jsvalue *collator, __jsvalue *x, __jsvalue *y);
-__jsvalue __jsintl_CollatorResolvedOptions(__jsvalue *collator);
+TValue __jsintl_CollatorCompare(TValue &this_collator, TValue &x, TValue &y);
+TValue CompareStrings(TValue &collator, TValue &x, TValue &y);
+TValue __jsintl_CollatorResolvedOptions(TValue &collator);
 std::vector<std::string> GetCollations();
 
 // DateTimeFormat
-void InitializeDateTimeFormat(__jsvalue *date_time_format, __jsvalue *locales,
-                              __jsvalue *options);
-void InitializeDateTimeFormatProperties(__jsvalue *date_time_format, __jsvalue *locales, __jsvalue *options);
-__jsvalue __jsintl_DateTimeFormatSupportedLocalesOf(__jsvalue *date_time_format,
-                                                    __jsvalue *arg_list,
+void InitializeDateTimeFormat(TValue &date_time_format, TValue &locales,
+                              TValue &options);
+void InitializeDateTimeFormatProperties(TValue &date_time_format, TValue &locales, TValue &options);
+TValue __jsintl_DateTimeFormatSupportedLocalesOf(TValue &date_time_format,
+                                                    TValue *arg_list,
                                                     uint32_t nargs);
-__jsvalue __jsintl_DateTimeFormatFormat(__jsvalue *date_time_format, __jsvalue *date);
-__jsvalue FormatDateTime(__jsvalue *date_time_format, __jsvalue *x);
-__jsvalue ToLocalTime(__jsvalue *x, __jsvalue *calendar, __jsvalue *time_zone);
-__jsvalue __jsintl_DateTimeFormatResolvedOptions(__jsvalue *date_time_format);
+TValue __jsintl_DateTimeFormatFormat(TValue &date_time_format, TValue &date);
+TValue FormatDateTime(TValue &date_time_format, TValue &x);
+TValue ToLocalTime(TValue &x, TValue &calendar, TValue &time_zone);
+TValue __jsintl_DateTimeFormatResolvedOptions(TValue &date_time_format);
 std::vector<std::string> GetAvailableCalendars();
 std::string ToBCP47CalendarName(const char* name);
-std::string GetDateTimeStringSkeleton(__jsvalue *locale, __jsvalue *options);
-__jsvalue GetICUPattern(std::string&, std::string& pattern);
-void ResolveICUPattern(__jsvalue *date_time_format, __jsvalue *pattern);
+std::string GetDateTimeStringSkeleton(TValue &locale, TValue &options);
+TValue GetICUPattern(std::string&, std::string& pattern);
+void ResolveICUPattern(TValue &date_time_format, TValue &pattern);
 
 #endif // JSINTL_H

@@ -32,10 +32,10 @@ bool __json_char_is_decimal_digit(__jschar c) {
   return (c >= JS_CHAR_0 && c <= JS_CHAR_9);
 }
 
-static void __js_list_append(__json_list *list, __jsvalue elem) {
+static void __js_list_append(__json_list *list, TValue elem) {
   __json_node *node = (__json_node *)VMMallocNOGC(sizeof(__json_node));
   node->value = elem;
-  GCCheckAndIncRf(elem.x.asbits, IsNeedRc(elem.ptyp));
+  GCCheckAndIncRf(GET_PAYLOAD(elem), IS_NEEDRC(elem.x.u64));
   node->next = NULL;
   node->prev = list->last;
   if (list->count == 0) {
@@ -50,7 +50,7 @@ static void __js_list_append(__json_list *list, __jsvalue elem) {
 static void __js_list_pop(__json_list *list) {
   MAPLE_JS_ASSERT(list->count > 0);
   __json_node *prev_node = list->last->prev;
-  GCCheckAndDecRf(list->last->value.x.asbits, IsNeedRc((list->last->value.ptyp)));
+  GCCheckAndDecRf(GET_PAYLOAD(list->last->value), IS_NEEDRC(list->last->value.x.u64));
   VMFreeNOGC(list->last, sizeof(__json_node));
   if (prev_node) {
     prev_node->next = NULL;
@@ -62,12 +62,12 @@ static void __js_list_pop(__json_list *list) {
   list->count--;
 }
 
-static bool __contains_value(__json_list *list, __jsvalue val) {
+static bool __contains_value(__json_list *list, TValue &val) {
   __json_node *node = list->first;
   uint32_t i = 0;
   while (i < list->count) {
-    __jsvalue tmp = node->value;
-    if (__jsop_stricteq(&tmp, &val)) {
+    TValue tmp = node->value;
+    if (__jsop_stricteq(tmp, val)) {
       return true;
     }
     node = node->next;
@@ -76,47 +76,47 @@ static bool __contains_value(__json_list *list, __jsvalue val) {
   return false;
 }
 
-__jsvalue __json_walk(__jsobject *reviver, __jsobject *holder, __jsvalue *name) {
-  __jsvalue val = __jsobj_internal_Get(holder, name);
-  if (__is_js_object(&val)) {
-    __jsobject *obj = __jsval_to_object(&val);
+TValue __json_walk(__jsobject *reviver, __jsobject *holder, TValue &name) {
+  TValue val = __jsobj_internal_Get(holder, name);
+  if (__is_js_object(val)) {
+    __jsobject *obj = __jsval_to_object(val);
     if (obj->object_class == JSARRAY) {
       uint32_t i = 0;
       uint32_t len = __jsobj_helper_get_length(obj);
       while (i < len) {
-        __jsvalue id = __number_value(i);
-        __jsvalue idx = __string_value(__js_ToString(&id));
-        __jsvalue newelem = __json_walk(reviver, obj, &idx);
-        if (__is_undefined(&newelem)) {
+        TValue id = __number_value(i);
+        TValue idx = __string_value(__js_ToString(id));
+        TValue newelem = __json_walk(reviver, obj, idx);
+        if (__is_undefined(newelem)) {
           __jsobj_internal_Delete(obj, i);
         } else {
-          __jsobj_helper_add_value_property(obj, &idx, &newelem, JSPROP_DESC_HAS_VWEC);
+          __jsobj_helper_add_value_property(obj, idx, newelem, JSPROP_DESC_HAS_VWEC);
         }
         i++;
       }
     } else {
-      __jsvalue keys = __jsobj_keys(NULL, &val);
-      __jsobject *arr = __jsval_to_object(&keys);
+      TValue keys = __jsobj_keys(val/*NULL*/, val);
+      __jsobject *arr = __jsval_to_object(keys);
       MAPLE_JS_ASSERT(arr->object_class == JSARRAY);
       uint32_t len = __jsobj_helper_get_length(arr);
       uint32_t i = 0;
       for (i = 0; i < len; i++) {
-        __jsvalue p = __jsarr_GetElem(arr, i);
-        __jsvalue newelem = __json_walk(reviver, obj, &p);
-        if (__is_undefined(&newelem)) {
-          __jsobj_internal_Delete(obj, &p);
+        TValue p = __jsarr_GetElem(arr, i);
+        TValue newelem = __json_walk(reviver, obj, p);
+        if (__is_undefined(newelem)) {
+          __jsobj_internal_Delete(obj, p);
         } else {
-          __jsobj_helper_add_value_property(obj, &p, &newelem, JSPROP_DESC_HAS_VWEC);
+          __jsobj_helper_add_value_property(obj, p, newelem, JSPROP_DESC_HAS_VWEC);
         }
       }
       memory_manager->ManageObject(arr, RECALL);
     }
   }
-  __jsvalue arg_list[2];
-  arg_list[0] = *name;
+  TValue arg_list[2];
+  arg_list[0] = name;
   arg_list[1] = val;
-  __jsvalue holder_val = __object_value(holder);
-  return __jsfun_internal_call(reviver, &holder_val, arg_list, 2);
+  TValue holder_val = __object_value(holder);
+  return __jsfun_internal_call(reviver, holder_val, arg_list, 2);
 }
 
 static void __json_parse_string(__json_token *token) {
@@ -247,8 +247,8 @@ static void __json_parse_number(__json_token *token) {
   for (uint32_t i = 0; i < length; i++) {
     __jsstr_set_char(str, i, (uint16_t)start[i]);
   }
-  __jsvalue val = __string_value(str);
-  token->u.number = __js_ToNumber(&val);
+  TValue val = __string_value(str);
+  token->u.number = __js_ToNumber(val);
   token->current = current;
   memory_manager->RecallString(str);
 }
@@ -374,7 +374,7 @@ static bool __json_check_right_square_token(__json_token *token) {
   return false;
 }
 
-__jsvalue __json_parse_value(__json_token *token) {
+TValue __json_parse_value(__json_token *token) {
   __json_parse_next_token(token);
 
   switch (token->type) {
@@ -436,9 +436,9 @@ __jsvalue __json_parse_value(__json_token *token) {
           break;
         }
 
-        __jsvalue value = __json_parse_value(token);
+        TValue value = __json_parse_value(token);
 
-        if (__is_undefined(&value)) {
+        if (__is_undefined(value)) {
           break;
         }
 
@@ -447,7 +447,7 @@ __jsvalue __json_parse_value(__json_token *token) {
         for (uint32_t i = 0; i < string_size; i++) {
           __jsstr_set_char(name, i, (uint16_t)(*(string_start + i)));
         }
-        __jsobj_helper_add_value_property(obj, name, &value, JSPROP_DESC_HAS_VWEC);
+        __jsobj_helper_add_value_property(obj, name, value, JSPROP_DESC_HAS_VWEC);
         GCDecRf(name);
         parse_comma = true;
       }
@@ -470,13 +470,13 @@ __jsvalue __json_parse_value(__json_token *token) {
           }
         }
 
-        __jsvalue value = __json_parse_value(token);
+        TValue value = __json_parse_value(token);
 
-        if (__is_undefined(&value)) {
+        if (__is_undefined(value)) {
           break;
         }
 
-        __set_generic_elem(arr, length, &value);
+        __set_generic_elem(arr, length, value);
         length++;
         parse_comma = true;
       }
@@ -489,24 +489,24 @@ __jsvalue __json_parse_value(__json_token *token) {
   return __undefined_value();
 }
 
-__jsvalue __json_toSource(__jsvalue *this_json, __jsvalue *text, __jsvalue *reviver) {
+TValue __json_toSource(TValue &this_json, TValue &text, TValue &reviver) {
   assert(false&&"__json_toSource nyi");
 }
 // ecma 15.12.2
-__jsvalue __json_parse(__jsvalue *this_json, __jsvalue *text, __jsvalue *reviver) {
+TValue __json_parse(TValue &this_json, TValue &text, TValue &reviver) {
   __jsstring *jtext = __js_ToString(text);
   //  MAPLE_JS_ASSERT(__jsstr_is_ascii(jtext));
   __json_token token;
   uint8_t *start = (uint8_t *)jtext + 4;
   token.current = start;
   token.end = start + __jsstr_get_length(jtext);
-  __jsvalue res = __json_parse_value(&token);
+  TValue res = __json_parse_value(&token);
   if (__js_IsCallable(reviver)) {
     __jsobject *root = __js_new_obj_obj_0();
     __jsstring *p = __jsstr_get_builtin(JSBUILTIN_STRING_EMPTY);
-    __jsvalue name = __string_value(p);
-    __jsobj_helper_add_value_property(root, JSBUILTIN_STRING_EMPTY, &res, JSPROP_DESC_HAS_VWEC);
-    return __json_walk(__js_ToObject(reviver), root, &name);
+    TValue name = __string_value(p);
+    __jsobj_helper_add_value_property(root, JSBUILTIN_STRING_EMPTY, res, JSPROP_DESC_HAS_VWEC);
+    return __json_walk(__js_ToObject(reviver), root, name);
   } else {
     return res;
   }
@@ -515,7 +515,7 @@ __jsvalue __json_parse(__jsvalue *this_json, __jsvalue *text, __jsvalue *reviver
 }
 
 // 15.12.3 stringify ( value [ , replacer [ , space ] ] )
-__jsvalue __json_stringify(__jsvalue *this_json, __jsvalue *value, __jsvalue *replacer, __jsvalue *space) {
+TValue __json_stringify(TValue &this_json, TValue &value, TValue &replacer, TValue &space) {
   __json_stringify_context context;
   // 1. Let stack be an empty List
   context.stack = (__json_list *)VMMallocGC(sizeof(__json_list), MemHeadJSList);
@@ -543,28 +543,28 @@ __jsvalue __json_stringify(__jsvalue *this_json, __jsvalue *value, __jsvalue *re
       if (obj->object_class == JSARRAY) {
         uint32_t length = __jsobj_helper_get_length(obj);
         uint32_t i = 0;
-        __jsvalue v, item;
+        TValue v, item;
         __jsstring *str = NULL;
         for (i = 0; i < length; i++) {
           v = __jsarr_GetElem(obj, i);
           item = __undefined_value();
-          if (__is_string(&v) || __is_number(&v)) {
-            str = __js_ToString(&v);
+          if (__is_string(v) || __is_number(v)) {
+            str = __js_ToString(v);
             item = __string_value(str);
-          } else if (__is_js_object(&v)) {
-            __jsobject *obj1 = __jsval_to_object(&v);
+          } else if (__is_js_object(v)) {
+            __jsobject *obj1 = __jsval_to_object(v);
             if (obj1->object_class == JSSTRING || obj1->object_class == JSNUMBER) {
-              str = __js_ToString(&v);
+              str = __js_ToString(v);
               item = __string_value(str);
             }
           }
           if (__contains_value(context.property_list, item)) {
-            if (!__is_string(&v)) {
+            if (!__is_string(v)) {
               memory_manager->RecallString(str);
             }
             continue;
           }
-          if (!__is_undefined(&item)) {
+          if (!__is_undefined(item)) {
             __js_list_append(context.property_list, item);
           }
         }
@@ -575,9 +575,9 @@ __jsvalue __json_stringify(__jsvalue *this_json, __jsvalue *value, __jsvalue *re
   if (__is_js_object(space)) {
     __jsobject *obj1 = __jsval_to_object(space);
     if (obj1->object_class == JSSTRING) {
-      *space = __string_value(__js_ToString(space));
+      space = __string_value(__js_ToString(space));
     } else if (obj1->object_class == JSNUMBER) {
-      *space = __number_value(__js_ToNumber(space));
+      space = __number_value(__js_ToNumber(space));
     }
   }
   // 6.
@@ -602,7 +602,7 @@ __jsvalue __json_stringify(__jsvalue *this_json, __jsvalue *value, __jsvalue *re
       context.gap_str = __jsstr_get_builtin(JSBUILTIN_STRING_EMPTY);
     else {
       if (len > 10) {
-        *space = __number_value(10);
+        space = __number_value(10);
         len = 10;
       }
       context.gap_str = __js_new_string_internal(len, false);
@@ -615,9 +615,9 @@ __jsvalue __json_stringify(__jsvalue *this_json, __jsvalue *value, __jsvalue *re
   __jsobject *wrapper = __js_new_obj_obj_0();
   GCIncRf(wrapper);
   __jsstring *empty = __jsstr_get_builtin(JSBUILTIN_STRING_EMPTY);
-  __jsvalue name = __string_value(empty);
+  TValue name = __string_value(empty);
   __jsobj_helper_add_value_property(wrapper, JSBUILTIN_STRING_EMPTY, value, JSPROP_DESC_HAS_VWEC);
-  __jsvalue ret = __json_str(&name, wrapper, &context);
+  TValue ret = __json_str(name, wrapper, &context);
   GCDecRf(wrapper);
   // Fixme: Need use inc-dec-rf pair.
   memory_manager->RecallString(context.gap_str);
@@ -626,57 +626,57 @@ __jsvalue __json_stringify(__jsvalue *this_json, __jsvalue *value, __jsvalue *re
   return ret;
 }
 
-__jsvalue __json_str(__jsvalue *key, __jsobject *holder, __json_stringify_context *context) {
+TValue __json_str(TValue &key, __jsobject *holder, __json_stringify_context *context) {
   // 1.
-  __jsvalue value = __jsobj_internal_Get(holder, key);
-  GCCheckAndIncRf(value.x.asbits, IsNeedRc((value.ptyp)));
+  TValue value = __jsobj_internal_Get(holder, key);
+  GCCheckAndIncRf(GET_PAYLOAD(value), IS_NEEDRC(value.x.u64));
   __jsstring *str;
   // 2.
-  if (__is_js_object(&value)) {
-    __jsobject *obj = __jsval_to_object(&value);
+  if (__is_js_object(value)) {
+    __jsobject *obj = __jsval_to_object(value);
     // 2.a
-    __jsvalue to_json = __jsobj_internal_Get(obj, JSBUILTIN_STRING_TO_JSON_UL);
+    TValue to_json = __jsobj_internal_Get(obj, JSBUILTIN_STRING_TO_JSON_UL);
     // 2.b
-    if (__js_IsCallable(&to_json)) {
-      __jsvalue temp = __jsfun_internal_call(__jsval_to_object(&to_json), &value, key, 1);
-      GCCheckAndUpdateRf(value.x.asbits, IsNeedRc(value.ptyp), temp.x.asbits, IsNeedRc((temp.ptyp)));
+    if (__js_IsCallable(to_json)) {
+      TValue temp = __jsfun_internal_call(__jsval_to_object(to_json), value, &key, 1);
+      GCCheckAndUpdateRf(GET_PAYLOAD(value), IS_NEEDRC(value.x.u64), GET_PAYLOAD(temp), IS_NEEDRC(temp.x.u64));
       value = temp;
     }
   }
   // 3
   if (context->replacer_function) {
-    __jsvalue args[2];
-    args[0] = *key;
+    TValue args[2];
+    args[0] = key;
     args[1] = value;
-    __jsvalue hold = __object_value(holder);
-    __jsvalue temp = __jsfun_internal_call(context->replacer_function, &hold, args, 2);
-    GCCheckAndUpdateRf(value.x.asbits, IsNeedRc(value.ptyp), temp.x.asbits, IsNeedRc((temp.ptyp)));
+    TValue hold = __object_value(holder);
+    TValue temp = __jsfun_internal_call(context->replacer_function, hold, args, 2);
+    GCCheckAndUpdateRf(GET_PAYLOAD(value), IS_NEEDRC(value.x.u64), GET_PAYLOAD(temp), IS_NEEDRC(temp.x.u64));
     value = temp;
   }
   // 4
-  if (__is_js_object(&value)) {
-    __jsobject *obj = __jsval_to_object(&value);
-    __jsvalue temp = value;
+  if (__is_js_object(value)) {
+    __jsobject *obj = __jsval_to_object(value);
+    TValue temp = value;
     if (obj->object_class == JSNUMBER) {
-      temp = __number_value(__js_ToNumber(&value));
+      temp = __number_value(__js_ToNumber(value));
     } else if (obj->object_class == JSSTRING) {
-      temp = __string_value(__js_ToString(&value));
+      temp = __string_value(__js_ToString(value));
     } else if (obj->object_class == JSBOOLEAN) {
       temp = __boolean_value(obj->shared.prim_bool);
     }
 
-    GCCheckAndUpdateRf(value.x.asbits, IsNeedRc(value.ptyp), temp.x.asbits, IsNeedRc((temp.ptyp)));
+    GCCheckAndUpdateRf(GET_PAYLOAD(value), IS_NEEDRC(value.x.u64), GET_PAYLOAD(temp), IS_NEEDRC(temp.x.u64));
     value = temp;
   }
 
-  __jsvalue res = __undefined_value();
-  switch (__jsval_typeof(&value)) {
+  TValue res = __undefined_value();
+  switch (__jsval_typeof(value)) {
     case JSTYPE_NULL:
       str = __jsstr_new_from_char("null");
       res = __string_value(str);
       break;
     case JSTYPE_BOOLEAN:
-      if (value.x.boo == true) {
+      if (value.x.u8 == 1) {
         str = __jsstr_new_from_char("true");
       } else {
         str = __jsstr_new_from_char("false");
@@ -684,17 +684,17 @@ __jsvalue __json_str(__jsvalue *key, __jsobject *holder, __json_stringify_contex
       res = __string_value(str);
       break;
     case JSTYPE_STRING:
-      str = __json_quote(__jsval_to_string(&value));
+      str = __json_quote(__jsval_to_string(value));
       res = __string_value(str);
       break;
     case JSTYPE_NUMBER:
     case JSTYPE_DOUBLE:
-      str = __js_ToString(&value);
+      str = __js_ToString(value);
       res = __string_value(str);
       break;
     case JSTYPE_OBJECT:
-      if (!__js_IsCallable(&value)) {
-        __jsobject *obj = __jsval_to_object(&value);
+      if (!__js_IsCallable(value)) {
+        __jsobject *obj = __jsval_to_object(value);
         if (obj->object_class == JSARRAY) {
           res = __json_array(obj, context);
         } else {
@@ -705,7 +705,7 @@ __jsvalue __json_str(__jsvalue *key, __jsobject *holder, __json_stringify_contex
     default:
       break;
   }
-  GCCheckAndDecRf(value.x.asbits, IsNeedRc((value.ptyp)));
+  GCCheckAndDecRf(GET_PAYLOAD(value), IS_NEEDRC(value.x.u64));
   return res;
 }
 
@@ -774,8 +774,8 @@ __jsstring *__json_quote(__jsstring *value) {
 }
 
 // The abstract operation JO(value) serializes an object
-__jsvalue __json_object(__jsobject *val, __json_stringify_context *context) {
-  __jsvalue value = __object_value(val);
+TValue __json_object(__jsobject *val, __json_stringify_context *context) {
+  TValue value = __object_value(val);
   // 1.
   if (__contains_value(context->stack, value)) {
     MAPLE_JS_TYPEERROR_EXCEPTION();
@@ -791,8 +791,8 @@ __jsvalue __json_object(__jsobject *val, __json_stringify_context *context) {
   if (context->property_list->count != 0) {
     k = context->property_list;
   } else {
-    __jsvalue keys = __jsobj_keys(NULL, &value);
-    __jsobject *obj = __jsval_to_object(&keys);
+    TValue keys = __jsobj_keys(value/*NULL*/, value);
+    __jsobject *obj = __jsval_to_object(keys);
     k = (__json_list *)VMMallocGC(sizeof(__json_list), MemHeadJSList);
     errno_t ret1 = memset_s(k, sizeof(__json_list), 0, sizeof(__json_list));
     if (ret1 != EOK) {
@@ -813,19 +813,19 @@ __jsvalue __json_object(__jsobject *val, __json_stringify_context *context) {
   __json_node *node = k->first;
   uint32_t i = 0;
   while (i < k->count) {
-    __jsvalue p = node->value;
+    TValue p = node->value;
     // 8.a
-    __jsvalue str = __json_str(&p, val, context);
+    TValue str = __json_str(p, val, context);
     // 8.b
-    if (!__is_undefined(&str)) {
+    if (!__is_undefined(str)) {
       // 8.b.i
       __jsstring *member = NULL;
-      if (__jsval_typeof(&(node->value)) == JSTYPE_NUMBER) {
-        member = __json_quote(__jsval_to_int32(&(node->value)));
-      } else if (__jsval_typeof(&(node->value)) == JSTYPE_DOUBLE) {
-        member = __json_quote(__jsval_to_double(&(node->value)));
+      if (IS_NUMBER(node->value.x.u64)) {
+        member = __json_quote(__jsval_to_int32(node->value));
+      } else if (IS_DOUBLE(node->value.x.u64)) {
+        member = __json_quote(__jsval_to_double(node->value));
       } else {
-        member = __json_quote(__jsval_to_string(&(node->value)));
+        member = __json_quote(__jsval_to_string(node->value));
       }
       // 8.b.2
       member = __jsstr_append_char(member, JS_CHAR_COLON);
@@ -834,7 +834,7 @@ __jsvalue __json_object(__jsobject *val, __json_stringify_context *context) {
         member = __jsstr_append_char(member, JS_CHAR_SP);
       }
       // 8.b.iv
-      __jsstring *str_val = __jsval_to_string(&str);
+      __jsstring *str_val = __jsval_to_string(str);
       __jsstring *tmp = __jsstr_concat_2(member, str_val);
       memory_manager->RecallString(member);
       memory_manager->RecallString(str_val);
@@ -862,11 +862,11 @@ __jsvalue __json_object(__jsobject *val, __json_stringify_context *context) {
     if (__jsstr_get_length(context->gap_str) == 0) {
       // 10.a.i
       __json_node *node = partial->first;
-      __jsstring *property = __jsval_to_string(&(node->value));
+      __jsstring *property = __jsval_to_string(node->value);
       __jsstring *comma = __jsstr_get_builtin(JSBUILTIN_STRING_COMMA_CHAR);
       node = node->next;
       while (node) {
-        __jsstring *item = __jsval_to_string(&(node->value));
+        __jsstring *item = __jsval_to_string(node->value);
         __jsstring *tmp = __jsstr_concat_3(property, comma, item);
         memory_manager->RecallString(property);
         property = tmp;
@@ -885,11 +885,11 @@ __jsvalue __json_object(__jsobject *val, __json_stringify_context *context) {
       __jsstr_copy(sep, 2, context->indent_str);
       // 10.b.ii
       __json_node *node = partial->first;
-      __jsstring *property = __jsval_to_string(&(node->value));
+      __jsstring *property = __jsval_to_string(node->value);
       node = node->next;
       __jsstring *tmp;
       while (node) {
-        __jsstring *item = __jsval_to_string(&(node->value));
+        __jsstring *item = __jsval_to_string(node->value);
         tmp = __jsstr_concat_3(property, sep, item);
         memory_manager->RecallString(property);
         property = tmp;
@@ -915,8 +915,8 @@ __jsvalue __json_object(__jsobject *val, __json_stringify_context *context) {
 }
 
 // The abstract operation JA(value) serializes an array.
-__jsvalue __json_array(__jsobject *val, __json_stringify_context *context) {
-  __jsvalue value = __object_value(val);
+TValue __json_array(__jsobject *val, __json_stringify_context *context) {
+  TValue value = __object_value(val);
   __jsstring *final_str;
   // 1.
   if (__contains_value(context->stack, value)) {
@@ -940,16 +940,16 @@ __jsvalue __json_array(__jsobject *val, __json_stringify_context *context) {
   uint32_t index = 0;
   // 8
   while (index < len) {
-    __jsvalue id = __number_value(index);
-    __jsstring *ind_str = __js_ToString(&id);
-    __jsvalue ind = __string_value(ind_str);
+    TValue id = __number_value(index);
+    __jsstring *ind_str = __js_ToString(id);
+    TValue ind = __string_value(ind_str);
     // 8.a
     GCIncRf(ind_str);
-    __jsvalue strp = __json_str(&ind, val, context);
+    TValue strp = __json_str(ind, val, context);
     GCDecRf(ind_str);
     // 8.b
-    if (__is_undefined(&strp)) {
-      __jsvalue null = __string_value(__jsstr_get_builtin(JSBUILTIN_STRING_NULL));
+    if (__is_undefined(strp)) {
+      TValue null = __string_value(__jsstr_get_builtin(JSBUILTIN_STRING_NULL));
       __js_list_append(partial, null);
     } else {
       __js_list_append(partial, strp);
@@ -969,17 +969,17 @@ __jsvalue __json_array(__jsobject *val, __json_stringify_context *context) {
     if (__jsstr_get_length(context->gap_str) == 0) {
       // 10.a.i
       __json_node *node = partial->first;
-      __jsstring *property = __jsval_to_string(&(node->value));
+      __jsstring *property = __jsval_to_string(node->value);
       __jsstring *comma = __jsstr_get_builtin(JSBUILTIN_STRING_COMMA_CHAR);
       node = node->next;
       if (node) {
-        MAPLE_JS_ASSERT(__is_string(&(node->value)));
-        __jsstring *item = __jsval_to_string(&(node->value));
+        MAPLE_JS_ASSERT(__is_string(node->value));
+        __jsstring *item = __jsval_to_string(node->value);
         property = __jsstr_concat_3(property, comma, item);
         node = node->next;
         while (node) {
-          MAPLE_JS_ASSERT(__is_string(&(node->value)));
-          __jsstring *item = __jsval_to_string(&(node->value));
+          MAPLE_JS_ASSERT(__is_string(node->value));
+          __jsstring *item = __jsval_to_string(node->value);
           __jsstring *temp = __jsstr_concat_3(property, comma, item);
           memory_manager->RecallString(property);
           property = temp;
@@ -1001,11 +1001,11 @@ __jsvalue __json_array(__jsobject *val, __json_stringify_context *context) {
       __jsstr_copy(sep, 2, context->indent_str);
       // 10.b.ii
       __json_node *node = partial->first;
-      __jsstring *property = __jsval_to_string(&(node->value));
+      __jsstring *property = __jsval_to_string(node->value);
       node = node->next;
       for (uint32_t i = 1; i < partial->count; i++) {
-        MAPLE_JS_ASSERT(__is_string(&(node->value)));
-        __jsstring *item = __jsval_to_string(&(node->value));
+        MAPLE_JS_ASSERT(__is_string(node->value));
+        __jsstring *item = __jsval_to_string(node->value);
         __jsstring *tmp = __jsstr_concat_3(property, sep, item);
         memory_manager->RecallString(property);
         property = tmp;

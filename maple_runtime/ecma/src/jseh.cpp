@@ -50,7 +50,7 @@ void *JsEh::GetEHpc(DynMFunction *callerFunc) {
     }
   } else {
     // free currEH
-    MValue v = thrownVal;
+    TValue v = thrownVal;
     FreeEH();
 
     if (gInterSource->EHstack.IsEmpty()) {

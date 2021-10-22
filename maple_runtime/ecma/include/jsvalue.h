@@ -91,8 +91,14 @@ enum __jstype : uint32_t {
 #define IS_UNDEFINED(V)  ((V & 0x7FFF000000000000) == 0x7FF9000000000000)  //JSTYPE_UNDEFINED = 9
 #define IS_NONE(V)       ((V & 0x7FFF000000000000) == 0x7FFA000000000000)  //JSTYPE_NONE = 10
 #define IS_NAN(V)        ((V & 0x7FFF000000000000) == 0x7FFB000000000000)  //JSTYPE_NAN = 11
+#define IS_SPBASE(V)     ((V & 0x7FFF000000000000) == 0x7FFC000000000000)  //JSTYPE_SPBASE = 12
+#define IS_FPBASE(V)     ((V & 0x7FFF000000000000) == 0x7FFD000000000000)  //JSTYPE_FPBASE = 13
+#define IS_GPBASE(V)     ((V & 0x7FFF000000000000) == 0x7FFE000000000000)  //JSTYPE_GPBASE = 14
 #define IS_NEEDRC(V)     (((uint64_t)V & 0x7FFC000000000000) == 0x7FF4000000000000)  //JSTYPE_STRING or JSTYPE_OBJECT or JSTYPE_ENV
 #define IS_ADDRESS(V)    (((uint64_t)V & 0x7FF4000000000000) == 0x7FF4000000000000)  //STRING,OBJECT,JSTYPE_ENV,SPBASE,FPBASE,GPBASE,FUNCTION
+
+#define GET_TYPE(v)      (IS_DOUBLE(v.x.u64) ? JSTYPE_DOUBLE : v.x.c.type & 0xF)
+#define GET_PAYLOAD(v)   (IS_DOUBLE(v.x.u64) ? v.x.u64 : v.x.c.payload)
 
 #define NAN_BASE        0x7FF0
 #define NAN_INFINITY    0x7FF0000000000000
@@ -129,18 +135,6 @@ enum __jstype : uint32_t {
   } else {\
     v.ptyp = JSTYPE_DOUBLE;\
   }\
-}
-
-inline maple::MValue TValue2MValue(maple::TValue &t) {
-  maple::MValue r;
-  if (NOT_DOUBLE(t.x.u64)) {
-    r.ptyp = t.x.c.type & ~NAN_BASE;
-    r.x.u64 = (t.x.u64 == POS_ZERO) ? POS_ZERO : (t.x.u64 & PAYLOAD_MASK);
-  } else {
-    r.ptyp = JSTYPE_DOUBLE;
-    r.x.u64 = t.x.u64;
-  }
-  return r;
 }
 
 enum __jsbuiltin_object_id : uint8_t {  // must in accordance with js_value.h:js_builtin_id in the front-end (js2mpl/include/jsvalue.h)
@@ -234,8 +228,8 @@ const double NumberMinValue = 5e-324;
 #define MATH_LAST_INDEX NUMBER_MIN_VALUE
 
 #ifdef MACHINE64
-typedef maple::MValue __jsvalue;
 /*
+typedef maple::TValue __jsvalue;
 struct __jsvalue {
   union {
     int32_t i32;
@@ -267,7 +261,7 @@ union __jsvalue {
 };
 #endif
 
-void dumpJSValue(__jsvalue *jsval);
+void dumpJSValue(maple::TValue &jsval);
 void dumpJSString(uint16_t *ptr);
 
 #endif

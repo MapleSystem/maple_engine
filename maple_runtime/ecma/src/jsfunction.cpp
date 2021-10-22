@@ -50,62 +50,65 @@ __jsobject *__create_function(void *fp, void *env, uint32_t attrs, int32_t fileI
   return f;
 }
 
+// 2021-10-18: Not sure which ECMA spec is referred to below. The closest appears to be ECMA-262 v3 or later.
+// However, there are differences from the spec, e.g., needpt is not in the spec.
 // ecma 13.2: Creating Function Objects
 // If varg_p, pass nargs as -nargs-1.
-__jsvalue __js_new_function(void *fp, void *env, uint32_t attrs, int32_t fileIdx, bool needpt) {
+TValue __js_new_function(void *fp, void *env, uint32_t attrs, int32_t fileIdx, bool needpt) {
   // ecma 13.2 step 1/3/4/13、15
   __jsobject *f = __create_function(fp, env, attrs, fileIdx);
   // ecma 13.2 step 16.
-  __jsobject *proto = __js_new_obj_obj_0();
+  __jsobject *proto = nullptr;
   // ecma 13.2 step 17.
   /* Avoid dead reference count between f and proto in GC.  */
   // ecma 13.2 step 18.
-  __jsvalue length_value = __number_value((attrs >> 8) & 0xff);
-  __jsobj_helper_init_value_property(f, JSBUILTIN_STRING_LENGTH, &length_value, JSPROP_DESC_HAS_VUWUEC);
+  TValue length_value = __number_value((attrs >> 8) & 0xff);
+  __jsobj_helper_init_value_property(f, JSBUILTIN_STRING_LENGTH, length_value, JSPROP_DESC_HAS_VUWUEC);
 
   if (needpt) {
-    __jsvalue proto_value = __object_value(proto);
-    __jsobj_helper_init_value_property(f, JSBUILTIN_STRING_PROTOTYPE, &proto_value, JSPROP_DESC_HAS_VWUEUC);
-    __jsvalue func_value = __object_value(f);
-    __jsobj_helper_init_value_property(proto, JSBUILTIN_STRING_CONSTRUCTOR, &func_value, JSPROP_DESC_HAS_VWUEUC);
+    proto = __js_new_obj_obj_0();
+    TValue proto_value = __object_value(proto);
+    __jsobj_helper_init_value_property(f, JSBUILTIN_STRING_PROTOTYPE, proto_value, JSPROP_DESC_HAS_VWUEUC);
+    TValue func_value = __object_value(f);
+    __jsobj_helper_init_value_property(proto, JSBUILTIN_STRING_CONSTRUCTOR, func_value, JSPROP_DESC_HAS_VWUEUC);
   }
   return __object_value(f);
 }
 
 // ecma 15.3.2.1 Function (p1, p2, … , pn, body)
-__jsvalue __js_new_functionN(void *fp, __jsvalue *arg_list, uint32_t argnum) {
+TValue __js_new_functionN(void *fp, TValue *arg_list, uint32_t argnum) {
   MIR_ASSERT(0 && "__js_new_functionN NIY");
   return __undefined_value();
 }
 
-__jsvalue __js_entry_function(__jsvalue *this_arg, bool strict_p) {
-  __jsvalue old_this = __js_ThisBinding;
+TValue __js_entry_function(TValue &this_arg, bool strict_p) {
+  TValue old_this = __js_ThisBinding;
 
   if (strict_p) {
-    __js_ThisBinding = *this_arg;
+    __js_ThisBinding = this_arg;
   } else if (__is_null_or_undefined(this_arg)) {
     __js_ThisBinding = __object_value(__jsobj_get_or_create_builtin(JSBUILTIN_GLOBALOBJECT));
   } else if (!__is_js_object(this_arg)) {
     __js_ThisBinding = __object_value(__js_ToObject(this_arg));
 #ifdef MACHINE64
     // __jsobject *obj = (__jsobject *)memory_manager->GetRealAddr(__js_ThisBinding.x.payload.obj);
-    __jsobject *obj = __js_ThisBinding.x.obj;
+    __jsobject *obj = (__jsobject *)GET_PAYLOAD(__js_ThisBinding);
 #else
     __jsobject *obj = __js_ThisBinding.x.payload.obj;
 #endif
     GCIncRf(obj);
   } else {
-    __js_ThisBinding = *this_arg;
+    __js_ThisBinding = this_arg;
   }
 
   return old_this;
 }
 
-void __js_exit_function(__jsvalue *this_arg, __jsvalue old_this, bool strict_p) {
+void __js_exit_function(TValue &this_arg, TValue old_this, bool strict_p) {
   if (!__is_js_object(this_arg) && !__is_null_or_undefined(this_arg) && !strict_p) {
 #ifdef MACHINE64
     // __jsobject *obj = (__jsobject *)memory_manager->GetRealAddr(__js_ThisBinding.x.payload.obj);
-    __jsobject *obj = (__js_ThisBinding.x.obj);
+    __jsobject *obj = (__jsobject *)GET_PAYLOAD(__js_ThisBinding);
 #else
     __jsobject *obj = __js_ThisBinding.x.payload.obj;
 #endif
@@ -116,7 +119,7 @@ void __js_exit_function(__jsvalue *this_arg, __jsvalue old_this, bool strict_p) 
 
 // ecma 13.2.1
 // ??? To be finished, see 13.2.1
-__jsvalue __jsfun_internal_call(__jsobject *f, __jsvalue *this_arg, __jsvalue *arg_list, uint32_t arg_count, __jsvalue *origArg) {
+TValue __jsfun_internal_call(__jsobject *f, TValue &this_arg, TValue *arg_list, uint32_t arg_count, TValue *origArg) {
   MIR_ASSERT(f != NULL);
   __jsfunction *fun = f->shared.fun;
   MIR_ASSERT(fun != NULL);
@@ -124,41 +127,41 @@ __jsvalue __jsfun_internal_call(__jsobject *f, __jsvalue *this_arg, __jsvalue *a
   bool varg_p = attrs >> 24;
   uint8_t flag = attrs & 0xff;
   uint8_t nargs = attrs >> 16 & 0xff;
-  __jsvalue return_value;
+  TValue return_value;
 
   // MIR_ASSERT(nargs >= 0);
   bool isCalleeStrict = flag & JSFUNCPROP_STRICT;
-  __jsvalue old_this = __js_entry_function((isCalleeStrict && origArg) ? origArg : this_arg, isCalleeStrict);
+  TValue old_this = __js_entry_function((isCalleeStrict && origArg) ? *origArg : this_arg, isCalleeStrict);
   // user function calls need to be interpreted
   if (flag & JSFUNCPROP_USERFUNC) {
-     MValue ret = gInterSource->FuncCall_JS(f, this_arg, fun->env, arg_list, (int32_t)arg_count);
+     TValue ret = gInterSource->FuncCall_JS(f, this_arg, fun->env, arg_list, (int32_t)arg_count);
      __js_exit_function(this_arg, old_this, flag & JSFUNCPROP_STRICT);
-     if (ret.x.u64 == (uint64_t)Exec_handle_exc) {
+     if (GET_PAYLOAD(ret) == (uint64_t)Exec_handle_exc) {
        throw "callee exception";
      }
      ret = gInterSource->retVal0;
-     mDecode(ret);
+     //mDecode(ret);
      return ret;
   }
 
   // varg_p
   if (varg_p) {
     if(fun->fp != __js_new_function) {
-      __jsvalue (*fp)(__jsvalue *, __jsvalue *, uint32_t) = (__jsvalue(*)(__jsvalue *, __jsvalue *, uint32_t))fun->fp;
+      TValue (*fp)(TValue &, TValue *, uint32_t) = (TValue(*)(TValue &, TValue *, uint32_t))fun->fp;
       return_value = (*fp)(this_arg, arg_list, arg_count);
     } else
-      return_value = __js_new_function(this_arg, arg_list, arg_count);
+      return_value = __js_new_function((void *)GET_PAYLOAD(this_arg), arg_list, arg_count);
     __js_exit_function(this_arg, old_this, flag & JSFUNCPROP_STRICT);
     return return_value;
   }
 
   MAPLE_JS_ASSERT(nargs <= 3 && "NYI");
-  __jsvalue arguments[3];
+  TValue arguments[3];
   if (arg_count < (uint32_t)nargs) {
     for (uint32_t i = 0; i < arg_count; i++) {
       arguments[i] = arg_list[i];
       // check argument is defined or not
-      if (__is_none(&arguments[i])) {
+      if (__is_none(arguments[i])) {
         MAPLE_JS_REFERENCEERROR_EXCEPTION();
       }
     }
@@ -173,25 +176,25 @@ __jsvalue __jsfun_internal_call(__jsobject *f, __jsvalue *this_arg, __jsvalue *a
 
   switch (nargs) {
     case 0: {
-      __jsvalue (*fp)(__jsvalue *) = (__jsvalue(*)(__jsvalue *))fun->fp;
+      TValue (*fp)(TValue &) = (TValue(*)(TValue &))fun->fp;
       return_value = (*fp)(this_arg);
       break;
     }
     case 1: {
-      __jsvalue (*fp)(__jsvalue *, __jsvalue *) = (__jsvalue(*)(__jsvalue *, __jsvalue *))fun->fp;
-      return_value = (*fp)(this_arg, &arguments[0]);
+      TValue (*fp)(TValue &, TValue &) = (TValue(*)(TValue &, TValue &))fun->fp;
+      return_value = (*fp)(this_arg, arguments[0]);
       break;
     }
     case 2: {
-      __jsvalue (*fp)(__jsvalue *, __jsvalue *, __jsvalue *) =
-        (__jsvalue(*)(__jsvalue *, __jsvalue *, __jsvalue *))fun->fp;
-      return_value = (*fp)(this_arg, &arguments[0], &arguments[1]);
+      TValue (*fp)(TValue &, TValue &, TValue &) =
+        (TValue(*)(TValue &, TValue &, TValue &))fun->fp;
+      return_value = (*fp)(this_arg, arguments[0], arguments[1]);
       break;
     }
     case 3: {
-      __jsvalue (*fp)(__jsvalue *, __jsvalue *, __jsvalue *, __jsvalue *) =
-        (__jsvalue(*)(__jsvalue *, __jsvalue *, __jsvalue *, __jsvalue *))fun->fp;
-      return_value = (*fp)(this_arg, &arguments[0], &arguments[1], &arguments[2]);
+      TValue (*fp)(TValue &, TValue &, TValue &, TValue &) =
+        (TValue(*)(TValue &, TValue &, TValue &, TValue &))fun->fp;
+      return_value = (*fp)(this_arg, arguments[0], arguments[1], arguments[2]);
       break;
     }
     default:
@@ -203,22 +206,22 @@ __jsvalue __jsfun_internal_call(__jsobject *f, __jsvalue *this_arg, __jsvalue *a
 }
 
 // Helper function for internal use.
-__jsvalue __jsfun_val_call(__jsvalue *function, __jsvalue *this_arg, __jsvalue *arg_list, uint32_t arg_count) {
+TValue __jsfun_val_call(TValue &function, TValue &this_arg, TValue *arg_list, uint32_t arg_count) {
   if (!__js_IsCallable(function)) {
     MAPLE_JS_TYPEERROR_EXCEPTION();
   }
   __jsobject *f = __jsval_to_object(function);
-  __jsvalue result = __jsfun_internal_call(f, this_arg, arg_list, arg_count);
+  TValue result = __jsfun_internal_call(f, this_arg, arg_list, arg_count);
   return result;
 }
 
 // ecma 13.2.2
-__jsvalue __jsfun_intr_Construct(__jsobject *f, __jsvalue *this_arg, __jsvalue *arg_list, uint32_t arg_count) {
+TValue __jsfun_intr_Construct(__jsobject *f, TValue &this_arg, TValue *arg_list, uint32_t arg_count) {
   __jsfunction *fun = f->shared.fun;
   uint32_t attrs = fun->attrs;
   uint8_t flag = attrs & 0xff;
-  __jsvalue reverse_args[MAXCALLARGNUM];
-  __jsvalue args[MAXCALLARGNUM];
+  TValue reverse_args[MAXCALLARGNUM];
+  TValue args[MAXCALLARGNUM];
   uint32_t n = 0;
   uint32_t sum_nargs = 0;
   if (flag & JSFUNCPROP_NATIVE && !(flag & JSFUNCPROP_CONSTRUCTOR)) {
@@ -231,7 +234,7 @@ __jsvalue __jsfun_intr_Construct(__jsobject *f, __jsvalue *this_arg, __jsvalue *
       if (nargs >= 0) {
         sum_nargs += nargs;
       }
-      __jsvalue *bound_args = &((__jsvalue *)fun->env)[1];
+      TValue *bound_args = &((TValue *)fun->env)[1];
       MIR_ASSERT(arg_count + sum_nargs <= MAXCALLARGNUM);
       for (int32_t i = 0; i < nargs; i++) {
         reverse_args[n++] = bound_args[i];
@@ -256,25 +259,25 @@ __jsvalue __jsfun_intr_Construct(__jsobject *f, __jsvalue *this_arg, __jsvalue *
 
   // ecma 13.2 step 1~7.
   __jsobject *obj = __js_new_obj_obj_0();
-  __jsvalue proto = __jsobj_internal_Get(f, JSBUILTIN_STRING_PROTOTYPE);
-  if (__is_js_object(&proto)) {
-    __jsobj_set_prototype(obj, __jsval_to_object(&proto));
+  TValue proto = __jsobj_internal_Get(f, JSBUILTIN_STRING_PROTOTYPE);
+  if (__is_js_object(proto)) {
+    __jsobj_set_prototype(obj, __jsval_to_object(proto));
   } else {
     __jsobj_set_prototype(obj, JSBUILTIN_OBJECTPROTOTYPE);
   }
   // ecma 13.2 step 8.
-  __jsvalue o = __object_value(obj);
+  TValue o = __object_value(obj);
   GCIncRf(obj);
 
-  __jsvalue result = __jsfun_internal_call(f, &o, args, arg_count);
+  TValue result = __jsfun_internal_call(f, o, args, arg_count);
 
   // ecma 13.2 step 9.
-  if (__is_js_object(&result)) {
+  if (__is_js_object(result)) {
     GCDecRf(obj);
     return result;
-  } else if (((flag & JSFUNCPROP_USERFUNC) == 0) && __is_primitive(&result)) {
+  } else if (((flag & JSFUNCPROP_USERFUNC) == 0) && __is_primitive(result)) {
     // wrap primitive result with object
-    __jsobject *resobj = __js_ToObject(&result);
+    __jsobject *resobj = __js_ToObject(result);
     GCDecRf(obj);
     return __object_value(resobj);
   } else { /*ecma 13.2 step 10. */
@@ -284,7 +287,7 @@ __jsvalue __jsfun_intr_Construct(__jsobject *f, __jsvalue *this_arg, __jsvalue *
 }
 
 // ecma 15.3.4.3
-__jsvalue __jsfun_pt_apply(__jsvalue *function, __jsvalue *this_arg, __jsvalue *arg_array) {
+TValue __jsfun_pt_apply(TValue &function, TValue &this_arg, TValue &arg_array) {
   // ecma 15.3.4.3 step 1.
   if (!__js_IsCallable(function)) {
     MAPLE_JS_TYPEERROR_EXCEPTION();
@@ -303,57 +306,57 @@ __jsvalue __jsfun_pt_apply(__jsvalue *function, __jsvalue *this_arg, __jsvalue *
   // ecma 15.3.4.3 step 5.
   uint32_t n = __jsobj_helper_get_length(arr_obj);
   // ecma 15.3.4.3 step 6.
-  __jsvalue *arg_list = (__jsvalue *)VMMallocNOGC(n * sizeof(__jsvalue));
+  TValue *arg_list = (TValue *)VMMallocNOGC(n * sizeof(TValue));
   // ecma 15.3.4.3 step 7.
   uint32_t index = 0;
   // ecma 15.3.4.3 step 8.
   while (index < n) {
-    __jsvalue next_arg = __jsobj_internal_Get(arr_obj, index);
+    TValue next_arg = __jsobj_internal_Get(arr_obj, index);
     arg_list[index] = next_arg;
     index++;
   }
   // ecma 15.3.4.3 step 9.
-  __jsvalue result = __jsfun_internal_call(func, this_arg, arg_list, n);
-  VMFreeNOGC(arg_list, n * sizeof(__jsvalue));
+  TValue result = __jsfun_internal_call(func, this_arg, arg_list, n);
+  VMFreeNOGC(arg_list, n * sizeof(TValue));
   return result;
 }
 
 // ecma 15.3.4.4
-__jsvalue __jsfun_pt_call(__jsvalue *function, __jsvalue *args, uint32_t arg_count) {
+TValue __jsfun_pt_call(TValue &function, TValue *args, uint32_t arg_count) {
   // ecma 15.3.4.4 step 1.
   if (!__js_IsCallable(function)) {
     MAPLE_JS_TYPEERROR_EXCEPTION();
   }
   // ecma 15.3.4.4 step 2~4.
   __jsobject *f = __jsval_to_object(function);
-  __jsvalue this_arg;
-  __jsvalue result;
+  TValue this_arg;
+  TValue result;
   if (arg_count == 0) {
     this_arg = __undefined_value();
-    result = __jsfun_internal_call(f, &this_arg, NULL, 0);
+    result = __jsfun_internal_call(f, this_arg, NULL, 0);
   } else {
-    result = __jsfun_internal_call(f, &args[0], &args[1], arg_count - 1);
+    result = __jsfun_internal_call(f, args[0], &args[1], arg_count - 1);
   }
   return result;
 }
 
 // ecma 15.3.4.5
-__jsvalue __jsfun_pt_bind(__jsvalue *function, __jsvalue *args, uint32_t arg_count) {
+TValue __jsfun_pt_bind(TValue &function, TValue *args, uint32_t arg_count) {
   // ecma 15.3.4.5 step 1.
-  __jsvalue target = __js_ThisBinding;
+  TValue target = __js_ThisBinding;
   // ecma 15.3.4.5 step 2.
-  if (!__js_IsCallable(&target)) {
+  if (!__js_IsCallable(target)) {
     MAPLE_JS_TYPEERROR_EXCEPTION();
   }
   // ecma 15.3.4.5 step 3.
   // ecma 15.3.4.5 step 4....
-  __jsvalue *bound_args = NULL;
+  TValue *bound_args = NULL;
   if (arg_count > 0) {
-    bound_args = (__jsvalue *)VMMallocGC(arg_count * sizeof(__jsvalue));
+    bound_args = (TValue *)VMMallocGC(arg_count * sizeof(TValue));
   }
   for (uint32_t i = 0; i < arg_count; i++) {
 #ifdef RC_NO_MMAP
-    GCCheckAndUpdateRf(bound_args[i].x.asbits, IsNeedRc(bound_args[i].ptyp), args[i].x.asbits, IsNeedRc(args[i].ptyp));
+    GCCheckAndUpdateRf(GET_PAYLOAD(bound_args[i]), IS_NEEDRC(bound_args[i].x.u64), GET_PAYLOAD(args[i]), IS_NEEDRC(args[i].x.u64));
 #endif
     bound_args[i] = args[i];
   }
@@ -362,38 +365,38 @@ __jsvalue __jsfun_pt_bind(__jsvalue *function, __jsvalue *args, uint32_t arg_cou
 
   // ecma 15.3.4.5 step 15~16.
   uint32_t len = 0;
-  if (__is_js_function(&__js_ThisBinding)) {
+  if (__is_js_function(__js_ThisBinding)) {
     arg_count = arg_count > 0 ? (arg_count - 1) : 0;
-    if (__jsop_length(&__js_ThisBinding) > arg_count) {
-      len = (int32_t)__jsop_length(&__js_ThisBinding) - arg_count;
+    if (__jsop_length(__js_ThisBinding) > arg_count) {
+      len = (int32_t)__jsop_length(__js_ThisBinding) - arg_count;
     }
   }
-  __jsvalue len_val = __number_value(len);
+  TValue len_val = __number_value(len);
   attr = attr | (len << 8);
-  __jsobject *f = __create_function((void *)__jsval_to_object(&target), (void *)bound_args, attr, -1);
+  __jsobject *f = __create_function((void *)__jsval_to_object(target), (void *)bound_args, attr, -1);
 
   // ecma 15.3.4.5 step 17.
-  __jsobj_helper_init_value_property(f, JSBUILTIN_STRING_LENGTH, &len_val, JSPROP_DESC_HAS_VUWUEC);
+  __jsobj_helper_init_value_property(f, JSBUILTIN_STRING_LENGTH, len_val, JSPROP_DESC_HAS_VUWUEC);
   // ecma 15.3.4.5 step 22....
   return __object_value(f);
 }
 
 // ecma 15.3.5.3
-bool __jsfun_internal_HasInstance(__jsobject *f, __jsvalue *v) {
+bool __jsfun_internal_HasInstance(__jsobject *f, TValue &v) {
   // ecma 15.3.5.3 step 1.
   if (!__is_js_object(v)) {
     return false;
   }
   // ecma 15.3.5.3 step 2.
-  __jsvalue o = __jsobj_internal_Get(f, JSBUILTIN_STRING_PROTOTYPE);
+  TValue o = __jsobj_internal_Get(f, JSBUILTIN_STRING_PROTOTYPE);
   // ecma 15.3.5.3 step 3.
-  if (__jsval_typeof(&o) != JSTYPE_OBJECT) {
+  if (__jsval_typeof(o) != JSTYPE_OBJECT) {
     MAPLE_JS_TYPEERROR_EXCEPTION();
   }
   // ecma 15.3.5.3 step 4.
   __jsobject *obj = __jsval_to_object(v);
   __jsobject *pt = __jsobj_get_prototype(obj);
-  __jsobject *objO = __jsval_to_object(&o);
+  __jsobject *objO = __jsval_to_object(o);
   while (true) {
     if (!pt) {
       return false;
@@ -405,7 +408,7 @@ bool __jsfun_internal_HasInstance(__jsobject *f, __jsvalue *v) {
   }
 }
 
-bool __js_Impl_HasInstance(__jsvalue *v) {
+bool __js_Impl_HasInstance(TValue &v) {
   // Object
   if(!__is_js_object(v)) {
       MAPLE_JS_TYPEERROR_EXCEPTION();
@@ -417,7 +420,7 @@ bool __js_Impl_HasInstance(__jsvalue *v) {
 }
 
 // ecma 15.3.4.2 Function.prototype.toString
-__jsvalue __jsfun_pt_tostring(__jsvalue *function) {
+TValue __jsfun_pt_tostring(TValue &function) {
   __jsstring *str;
   if (!__js_IsCallable(function)) {
     MAPLE_JS_TYPEERROR_EXCEPTION();

@@ -19,7 +19,7 @@
 #include "jstycnv.h"
 
 // ecma 11.4.3 The typeof Operator
-__jsvalue __jsop_typeof(__jsvalue *v) {
+TValue __jsop_typeof(TValue &v) {
   __jsbuiltin_string_id id;
   switch (__jsval_typeof(v)) {
     case JSTYPE_NONE:
@@ -35,7 +35,7 @@ __jsvalue __jsop_typeof(__jsvalue *v) {
       id = JSBUILTIN_STRING_BOOLEAN;
       break;
     case JSTYPE_NUMBER:
-      id = (v->x.u64 == 0) ? JSBUILTIN_STRING_UNDEFINED : JSBUILTIN_STRING_NUMBER;
+      id = (v.x.u64 == 0) ? JSBUILTIN_STRING_UNDEFINED : JSBUILTIN_STRING_NUMBER;
       break;
     case JSTYPE_DOUBLE:
     case JSTYPE_NAN:

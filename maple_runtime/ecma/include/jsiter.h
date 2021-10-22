@@ -41,7 +41,7 @@ struct __jsiterator {
   bool isNew; // just newed, didn't iterated yet
 };
 
-__jsiterator *__jsop_valueto_iterator(__jsvalue *value, uint32_t flags);
-__jsvalue __jsop_iterator_next(void *_itr_obj);
+__jsiterator *__jsop_valueto_iterator(TValue &value, uint32_t flags);
+TValue __jsop_iterator_next(void *_itr_obj);
 bool __jsop_more_iterator(void *_itr_obj);
 #endif

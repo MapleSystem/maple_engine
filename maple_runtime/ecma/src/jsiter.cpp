@@ -22,7 +22,7 @@
 #include "jsiter.h"
 #include "vmmemory.h"
 
-__jsiterator *__jsop_valueto_iterator(__jsvalue *value, uint32_t flags) {
+__jsiterator *__jsop_valueto_iterator(TValue &value, uint32_t flags) {
   __jsiterator *itr = (__jsiterator *)VMMallocGC(sizeof(__jsiterator), MemHeadJSIter);
   // if value is undefined, return an empty iterator
   if (__is_null_or_undefined(value)) {
@@ -55,7 +55,7 @@ __jsiterator *__jsop_valueto_iterator(__jsvalue *value, uint32_t flags) {
   return itr;
 }
 
-__jsvalue __jsop_iterator_next(void *_itr_obj) {
+TValue __jsop_iterator_next(void *_itr_obj) {
   __jsiterator *itr_obj = (__jsiterator *)_itr_obj;
   // handle empty iterator
   if (!itr_obj->obj) {
@@ -74,8 +74,8 @@ __jsvalue __jsop_iterator_next(void *_itr_obj) {
     __jsstring *retName = NULL;
     while (itr_obj->prop_cur.index < len) {
       uint32_t index = itr_obj->prop_cur.index;
-      __jsvalue idx_val = __number_value(index);
-      __jsprop_desc elem = __jsobj_internal_GetProperty(itr_obj->obj, &idx_val);
+      TValue idx_val = __number_value(index);
+      __jsprop_desc elem = __jsobj_internal_GetProperty(itr_obj->obj, idx_val);
       if (index == len - 1) {
         isLastIndex = true;
       }
@@ -99,8 +99,8 @@ __jsvalue __jsop_iterator_next(void *_itr_obj) {
         if (skipProp->isIndex)
           breakIndx = skipProp->n.index;
         else {
-          __jsvalue name = __string_value(skipProp->n.name);
-          breakIndx = __jsarr_getIndex(&name);
+          TValue name = __string_value(skipProp->n.name);
+          breakIndx = __jsarr_getIndex(name);
         }
         if (breakIndx == MAX_ARRAY_INDEX) {
           break;
@@ -141,8 +141,8 @@ __jsvalue __jsop_iterator_next(void *_itr_obj) {
       while (itr_obj->prop_cur.prop) {
         __jsprop *cur = itr_obj->prop_cur.prop;
         if (itr_obj->obj->object_class == JSARRAY) {
-          __jsvalue name = __string_value(cur->n.name);
-          if (__jsarr_getIndex(&name) != MAX_ARRAY_INDEX) {
+          TValue name = __string_value(cur->n.name);
+          if (__jsarr_getIndex(name) != MAX_ARRAY_INDEX) {
             itr_obj->prop_cur.prop = cur->next;
             continue;
           }

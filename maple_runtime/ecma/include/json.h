@@ -136,6 +136,8 @@
 #define JS_CHAR_8 ((__jschar)'8')
 #define JS_CHAR_9 ((__jschar)'9')
 
+using namespace maple;
+
 extern bool lit_char_is_octal_digit(__jschar);
 extern bool lit_char_is_hex_digit(__jschar);
 extern uint32_t lit_char_hex_to_int(__jschar);
@@ -172,7 +174,7 @@ typedef struct {
 } __json_token;
 
 typedef struct __json_node {
-  __jsvalue value;
+  TValue value;
   struct __json_node *prev;
   struct __json_node *next;
 } __json_node;
@@ -193,11 +195,11 @@ typedef struct {
   __jsobject *replacer_function;
 } __json_stringify_context;
 
-__jsvalue __json_toSource(__jsvalue *this_json, __jsvalue *text, __jsvalue *reviver);
-__jsvalue __json_parse(__jsvalue *this_json, __jsvalue *text, __jsvalue *reviver);
-__jsvalue __json_stringify(__jsvalue *this_json, __jsvalue *value, __jsvalue *replacer, __jsvalue *space);
-__jsvalue __json_str(__jsvalue *key, __jsobject *holder, __json_stringify_context *context);
+TValue __json_toSource(TValue &this_json, TValue &text, TValue &reviver);
+TValue __json_parse(TValue &this_json, TValue &text, TValue &reviver);
+TValue __json_stringify(TValue &this_json, TValue &value, TValue &replacer, TValue &space);
+TValue __json_str(TValue &key, __jsobject *holder, __json_stringify_context *context);
 __jsstring *__json_quote(__jsstring *value);
-__jsvalue __json_object(__jsobject *val, __json_stringify_context *context);
-__jsvalue __json_array(__jsobject *val, __json_stringify_context *context);
+TValue __json_object(__jsobject *val, __json_stringify_context *context);
+TValue __json_array(__jsobject *val, __json_stringify_context *context);
 #endif

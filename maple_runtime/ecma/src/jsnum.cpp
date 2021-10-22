@@ -206,7 +206,7 @@ static uint32_t inline __js_get_char_without_leading_spaces(__jsstring *str, wch
   return j;
 }
 
-__jsvalue __js_str2double(__jsstring *str, bool &isNum) {
+TValue __js_str2double(__jsstring *str, bool &isNum) {
   isNum = true;
   uint32_t len = __jsstr_get_length(str);
   wchar_t chars[len+1];
@@ -263,7 +263,7 @@ __jsvalue __js_str2double(__jsstring *str, bool &isNum) {
 }
 
 // for parseFloat
-__jsvalue __js_str2double2(__jsstring *str, bool &isNum) {
+TValue __js_str2double2(__jsstring *str, bool &isNum) {
   isNum = true;
   uint32_t len = __jsstr_get_length(str);
   wchar_t chars[len+1];
@@ -540,7 +540,7 @@ void __double_to_string(double f, char r[]) {
 }
 
 // ecma 15.7.4.2
-__jsvalue __jsnum_pt_toString(__jsvalue *this_number, __jsvalue *radix) {
+TValue __jsnum_pt_toString(TValue &this_number, TValue &radix) {
   if (__is_double(this_number)) {
     return __string_value(__js_DoubleToString(__jsval_to_double(this_number)));
   }
@@ -559,9 +559,9 @@ __jsvalue __jsnum_pt_toString(__jsvalue *this_number, __jsvalue *radix) {
   signstr = istr = ret = NULL;
   int64_t val;
 #ifdef MACHINE64
-  if (this_number->ptyp == JSTYPE_OBJECT) {
+  if (IS_OBJECT(this_number.x.u64)) {
     // __jsobject *obj = (__jsobject *)memory_manager->GetRealAddr(this_number->x.payload.obj);
-    __jsobject *obj = this_number->x.obj;
+    __jsobject *obj = (__jsobject *)GET_PAYLOAD(this_number);
     if(obj->object_class == JSNUMBER) {
       if (obj->object_type == JSSPECIAL_NUMBER_OBJECT) {
         // NaN or Infinity
@@ -597,7 +597,7 @@ __jsvalue __jsnum_pt_toString(__jsvalue *this_number, __jsvalue *radix) {
 // ecma 15.7.4.3
 // Locale-specific, implement it if really needed.
 // ECMA 13.2.1 Number.prototype.toLocaleString([locales [,options]])
-__jsvalue __jsnum_pt_toLocaleString(__jsvalue *this_number, __jsvalue *args, uint32_t num_args) {
+TValue __jsnum_pt_toLocaleString(TValue &this_number, TValue *args, uint32_t num_args) {
   // Check the correctness of this_number first.
   if (__is_undefined(this_number) || __is_null(this_number)) {
     MAPLE_JS_TYPEERROR_EXCEPTION();
@@ -607,9 +607,9 @@ __jsvalue __jsnum_pt_toLocaleString(__jsvalue *this_number, __jsvalue *args, uin
   }
 
   // Step 1.
-  __jsvalue x;
-  if (this_number->ptyp == JSTYPE_OBJECT) {
-    __jsobject *obj = this_number->x.obj;
+  TValue x;
+  if (IS_OBJECT(this_number.x.u64)) {
+    __jsobject *obj = (__jsobject *)GET_PAYLOAD(this_number);
     if (obj->object_class == JSNUMBER) {
       if (obj->object_type == JSSPECIAL_NUMBER_OBJECT) {
         x = __js_ToPrimitive2(this_number);
@@ -621,14 +621,14 @@ __jsvalue __jsnum_pt_toLocaleString(__jsvalue *this_number, __jsvalue *args, uin
     } else {
       MAPLE_JS_TYPEERROR_EXCEPTION();
     }
-  } else if (this_number->ptyp == JSTYPE_DOUBLE) {
+  } else if (IS_DOUBLE(this_number.x.u64)) {
     x = __double_value(__jsval_to_double(this_number));
   } else {
     x = __number_value(__js_ToNumber(this_number));
   }
 
   // Step 2-3.
-  __jsvalue locales = __undefined_value(), options = __undefined_value();
+  TValue locales = __undefined_value(), options = __undefined_value();
   if (num_args == 0) {
     // Do nothing.
   } else if (num_args == 1) {
@@ -638,21 +638,21 @@ __jsvalue __jsnum_pt_toLocaleString(__jsvalue *this_number, __jsvalue *args, uin
     options = args[1];
   }
   // Step 4.
-  __jsvalue undefined = __undefined_value();
-  __jsvalue arg_list[] = {locales, options};
-  __jsvalue number_format = __js_NumberFormatConstructor(&undefined, arg_list, 2);
+  TValue undefined = __undefined_value();
+  TValue arg_list[] = {locales, options};
+  TValue number_format = __js_NumberFormatConstructor(undefined, arg_list, 2);
 
-  return FormatNumber(&number_format, &x);
+  return FormatNumber(number_format, x);
 }
 
 // ecma 15.7.4.4
-__jsvalue __jsnum_pt_valueOf(__jsvalue *this_number) {
+TValue __jsnum_pt_valueOf(TValue &this_number) {
   if (!__is_number_object(this_number) && ! __is_number(this_number)
                         && !__is_double_object(this_number) && !__is_double(this_number)) {
     MAPLE_JS_TYPEERROR_EXCEPTION();
   }
   if (__is_number(this_number) || __is_double(this_number)) {
-    return *this_number;
+    return this_number;
   } else {
     __jsobject *obj = __jsval_to_object(this_number);
     if (__is_number_object(this_number)) {
@@ -679,7 +679,7 @@ static inline __jsstring* __jsdouble_toFixed(double val, int fracdigits) {
 }
 
 // ecma 15.7.4.5, return a string Jsvalue
-__jsvalue __jsnum_pt_toFixed(__jsvalue *this_number, __jsvalue *fracdigit) {
+TValue __jsnum_pt_toFixed(TValue &this_number, TValue &fracdigit) {
   MAPLE_JS_EXCEPTION((__is_nan(this_number) || __is_number_object(this_number) || __is_number(this_number) ||
                       __is_double_object(this_number) || __is_double(this_number)) && "TypeError!");
 
@@ -706,7 +706,7 @@ __jsvalue __jsnum_pt_toFixed(__jsvalue *this_number, __jsvalue *fracdigit) {
 
   // get double value from this_number
   if (__is_double(this_number)) {
-    dval = (this_number->x.f64);
+    dval = (this_number.x.f64);
   } else if (__is_number(this_number)) {
     dval = (double)__js_ToNumber(this_number);
   } else {
@@ -737,12 +737,12 @@ __jsvalue __jsnum_pt_toFixed(__jsvalue *this_number, __jsvalue *fracdigit) {
   return __string_value(ret);
 }
 
-__jsvalue __jsnum_pt_toExponential(__jsvalue *this_number, __jsvalue *fractdigit) {
+TValue __jsnum_pt_toExponential(TValue &this_number, TValue &fractdigit) {
   MAPLE_JS_ASSERT(false && "NIY: Number.prototype.toExponential");
   return __undefined_value();
 }
 
-__jsvalue __jsnum_pt_toPrecision(__jsvalue *this_number, __jsvalue *precision) {
+TValue __jsnum_pt_toPrecision(TValue &this_number, TValue &precision) {
   MAPLE_JS_ASSERT(false && "NIY: Number.prototype.toPrecision");
   return __undefined_value();
 }

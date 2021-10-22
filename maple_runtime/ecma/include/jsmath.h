@@ -17,24 +17,24 @@
 #include "jsvalueinline.h"
 #include "jstycnv.h"
 #include "vmmemory.h"
-__jsvalue __jsmath_pt_abs(__jsvalue *this_math, __jsvalue *value);
-__jsvalue __jsmath_pt_ceil(__jsvalue *this_math, __jsvalue *value);
-__jsvalue __jsmath_pt_floor(__jsvalue *this_math, __jsvalue *value);
-__jsvalue __jsmath_pt_max(__jsvalue *this_math, __jsvalue *items, uint32_t size);
-__jsvalue __jsmath_pt_min(__jsvalue *this_math, __jsvalue *items, uint32_t size);
-__jsvalue __jsmath_pt_pow(__jsvalue *this_math, __jsvalue *x, __jsvalue *y);
-__jsvalue __jsmath_pt_round(__jsvalue *this_math, __jsvalue *value);
-__jsvalue __jsmath_pt_sqrt(__jsvalue *this_math, __jsvalue *value);
-__jsvalue __jsmath_pt_sin(__jsvalue *this_math, __jsvalue *value);
-__jsvalue __jsmath_pt_asin(__jsvalue *this_math, __jsvalue *value);
-__jsvalue __jsmath_pt_cos(__jsvalue *this_math, __jsvalue *value);
-__jsvalue __jsmath_pt_acos(__jsvalue *this_math, __jsvalue *value);
-__jsvalue __jsmath_pt_tan(__jsvalue *this_math, __jsvalue *value);
-__jsvalue __jsmath_pt_atan(__jsvalue *this_math, __jsvalue *value);
-__jsvalue __jsmath_pt_atan2(__jsvalue *this_math, __jsvalue *y, __jsvalue *x);
-__jsvalue __jsmath_pt_log(__jsvalue *this_math, __jsvalue *value);
-__jsvalue __jsmath_pt_exp(__jsvalue *this_math, __jsvalue *value);
-__jsvalue __jsmath_pt_random(__jsvalue *this_math);
+TValue __jsmath_pt_abs(TValue &this_math, TValue &value);
+TValue __jsmath_pt_ceil(TValue &this_math, TValue &value);
+TValue __jsmath_pt_floor(TValue &this_math, TValue &value);
+TValue __jsmath_pt_max(TValue &this_math, TValue *items, uint32_t size);
+TValue __jsmath_pt_min(TValue &this_math, TValue *items, uint32_t size);
+TValue __jsmath_pt_pow(TValue &this_math, TValue &x, TValue &y);
+TValue __jsmath_pt_round(TValue &this_math, TValue &value);
+TValue __jsmath_pt_sqrt(TValue &this_math, TValue &value);
+TValue __jsmath_pt_sin(TValue &this_math, TValue &value);
+TValue __jsmath_pt_asin(TValue &this_math, TValue &value);
+TValue __jsmath_pt_cos(TValue &this_math, TValue &value);
+TValue __jsmath_pt_acos(TValue &this_math, TValue &value);
+TValue __jsmath_pt_tan(TValue &this_math, TValue &value);
+TValue __jsmath_pt_atan(TValue &this_math, TValue &value);
+TValue __jsmath_pt_atan2(TValue &this_math, TValue &y, TValue &x);
+TValue __jsmath_pt_log(TValue &this_math, TValue &value);
+TValue __jsmath_pt_exp(TValue &this_math, TValue &value);
+TValue __jsmath_pt_random(TValue &this_math);
 
 inline bool __is_int32_range(double t) {
   return t >= (int32_t)0x80000000 && t <= (int32_t)0x7fffffff;

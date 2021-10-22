@@ -17,6 +17,8 @@
 #define JSFUNCTION_H
 #include "jsvalue.h"
 
+using namespace maple;
+
 #define JSFUNCPROP_STRICT ((uint8_t)0x01)
 #define JSFUNCPROP_NATIVE ((uint8_t)0x02)
 #define JSFUNCPROP_USERFUNC ((uint8_t)0x04)
@@ -37,25 +39,25 @@ struct __jsfunction {
 };
 
 // ecma 13.2
-__jsvalue __js_new_function(void *fp, void *env, uint32_t attrs, int32_t idx = -1, bool needpt = true);
+TValue __js_new_function(void *fp, void *env, uint32_t attrs, int32_t idx = -1, bool needpt = true);
 // ecma 13.2.1
-__jsvalue __jsfun_internal_call(__jsobject *f, __jsvalue *this_arg, __jsvalue *arg_list, uint32_t arg_count, __jsvalue *orig_arg = NULL);
+TValue __jsfun_internal_call(__jsobject *f, TValue &this_arg, TValue *arg_list, uint32_t arg_count, TValue *orig_arg = NULL);
 // Helper function for internal use.
-__jsvalue __jsfun_val_call(__jsvalue *function, __jsvalue *this_arg, __jsvalue *arg_list, uint32_t arg_count);
+TValue __jsfun_val_call(TValue &function, TValue &this_arg, TValue *arg_list, uint32_t arg_count);
 // ecma 13.2.2
-__jsvalue __jsfun_intr_Construct(__jsobject *f, __jsvalue *this_arg, __jsvalue *arg_list, uint32_t arg_count);
+TValue __jsfun_intr_Construct(__jsobject *f, TValue &this_arg, TValue *arg_list, uint32_t arg_count);
 // ecma 15.3.4.3
-__jsvalue __jsfun_pt_apply(__jsvalue *function, __jsvalue *this_arg, __jsvalue *arg_array);
+TValue __jsfun_pt_apply(TValue &function, TValue &this_arg, TValue &arg_array);
 // ecma 15.3.4.4
-__jsvalue __jsfun_pt_call(__jsvalue *function, __jsvalue *args, uint32_t arg_count);
+TValue __jsfun_pt_call(TValue &function, TValue *args, uint32_t arg_count);
 // ecma 15.3.4.5
-__jsvalue __jsfun_pt_bind(__jsvalue *function, __jsvalue *args, uint32_t arg_count);
-bool __jsfun_internal_HasInstance(__jsobject *f, __jsvalue *v);
-bool __js_Impl_HasInstance(__jsvalue *v);
-__jsvalue __jsfun_internal_call_interp(__jsfunction *, __jsvalue *, uint32_t);
+TValue __jsfun_pt_bind(TValue &function, TValue *args, uint32_t arg_count);
+bool __jsfun_internal_HasInstance(__jsobject *f, TValue &v);
+bool __js_Impl_HasInstance(TValue &v);
+TValue __jsfun_internal_call_interp(__jsfunction *, TValue *, uint32_t);
 
 // ecma 15.3.2.1 new Function (p1, p2, … , pn, body)
-__jsvalue __js_new_functionN(void *, __jsvalue *, uint32_t);
+TValue __js_new_functionN(void *, TValue *, uint32_t);
 // ecma 15.3.4.2Function.prototype.toString
-__jsvalue __jsfun_pt_tostring(__jsvalue *);
+TValue __jsfun_pt_tostring(TValue &);
 #endif

@@ -31,6 +31,7 @@
 #include "jsarray.h"
 #include "jsobject.h"
 #include "jsregexp.h"
+#include "jsintl.h"
 
 char NO_BREAK_SPACE = 0x00A0;
 uint32_t BYTE_ORDER_MARK = 0xFEFF;
@@ -159,7 +160,7 @@ __jsstring *__jsstr_get_builtin(__jsbuiltin_string_id id) {
   return (__jsstring *)builtin_strings[id];
 }
 
-__jsvalue __js_new_string(uint16_t *data) {
+TValue __js_new_string(uint16_t *data) {
   return __string_value((__jsstring *)data);
 }
 
@@ -204,11 +205,11 @@ bool __jsstr_equal(__jsstring *str1, __jsstring *str2, bool checknumber) {
   // convert to double to compare the value
   if (checknumber) {
     bool isDouble;
-    __jsvalue dlen1 = __js_str2double(str1, isDouble);
+    TValue dlen1 = __js_str2double(str1, isDouble);
     if (isDouble) {
-      __jsvalue dlen2 = __js_str2double(str2, isDouble);
+      TValue dlen2 = __js_str2double(str2, isDouble);
       if (isDouble) {
-        return (__jsval_to_double(&dlen1) == __jsval_to_double(&dlen2));
+        return (__jsval_to_double(dlen1) == __jsval_to_double(dlen2));
       }
     }
   }
@@ -373,18 +374,18 @@ uint16_t *__js_skipSpace(uint16_t *s, uint16_t *end) {
   return s;
 }
 
-/*  Ecma 15.5.3.2 String.fromCharCode ( [ char0 [ , char1 [ , бн ] ] ] ) */
-__jsvalue __jsstr_fromCharCode(__jsvalue *this_string, __jsvalue *array, uint32_t size) {
+/*  Ecma 15.5.3.2 String.fromCharCode ( [ char0 [ , char1 [ , ...] ] ] ) */
+TValue __jsstr_fromCharCode(TValue &this_string, TValue *array, uint32_t size) {
   __jsstring *str = __js_new_string_internal(size, true);
   for (uint32_t i = 0; i < size; i++) {
-    __jsvalue value = array[i];
-    __jsstr_set_char(str, i, __js_ToUint16(&value));
+    TValue value = array[i];
+    __jsstr_set_char(str, i, __js_ToUint16(value));
   }
   return __string_value(str);
 }
 
 // ecma 15.5.4.2
-__jsvalue __jsstr_toString(__jsvalue *this_string) {
+TValue __jsstr_toString(TValue &this_string) {
   if (__is_js_object(this_string)) {
     __jsobject *obj = __jsval_to_object(this_string);
     if (obj->object_class != JSSTRING) {
@@ -398,18 +399,18 @@ __jsvalue __jsstr_toString(__jsvalue *this_string) {
     if (!__is_string(this_string)) {
       MAPLE_JS_TYPEERROR_EXCEPTION();
     }
-    return *this_string;
+    return this_string;
   }
 }
 
 // ecma 15.5.4.3
 // for a String object, the toString method happens to return the same thing as the valueOf method
-__jsvalue __jsstr_valueOf(__jsvalue *this_string) {
+TValue __jsstr_valueOf(TValue &this_string) {
   return __jsstr_toString(this_string);
 }
 
 /*  Ecma 15.5.4.4 String.prototype.charAt (pos) */
-__jsvalue __jsstr_charAt(__jsvalue *this_string, __jsvalue *pos) {
+TValue __jsstr_charAt(TValue &this_string, TValue &pos) {
   // step 1:
   CheckObjectCoercible(this_string);
   // step 2:
@@ -431,12 +432,12 @@ __jsvalue __jsstr_charAt(__jsvalue *this_string, __jsvalue *pos) {
 }
 
 /*  Ecma 15.5.4.5 String.prototype.charCodeAt (pos) */
-__jsvalue __jsstr_charCodeAt(__jsvalue *this_string, __jsvalue *idx) {
+TValue __jsstr_charCodeAt(TValue &this_string, TValue &idx) {
   // step 1:
   CheckObjectCoercible(this_string);
   // step 2:
   __jsstring *str = __js_ToString(this_string);
-  __jsvalue v = {};
+  TValue v = {};
   // step 3:
   int32_t d = __js_ToInteger(idx);
   uint32_t size = __jsstr_get_length(str);
@@ -447,12 +448,12 @@ __jsvalue __jsstr_charCodeAt(__jsvalue *this_string, __jsvalue *idx) {
     return __nan_value();
   }
   // step 5:
-  __set_number(&v, (int32_t)(__jsstr_get_char(str, (uint32_t)d)));
+  __set_number(v, (int32_t)(__jsstr_get_char(str, (uint32_t)d)));
   return v;
 }
 
 /*  Ecma 15.5.4.6 String.prototype.concat ( [ string1 [ , string2 [ , ... ] ] ] ) */
-__jsvalue __jsstr_concat(__jsvalue *this_string, __jsvalue *arr, uint32_t size) {
+TValue __jsstr_concat(TValue &this_string, TValue *arr, uint32_t size) {
   // step 1:
   CheckObjectCoercible(this_string);
   // step 2:
@@ -464,8 +465,8 @@ __jsvalue __jsstr_concat(__jsvalue *this_string, __jsvalue *arr, uint32_t size) 
   }
   uint32_t len = __jsstr_get_length(s[0]);
   for (uint32_t i = 0; i < size; i++) {
-    __jsvalue val = __is_none(&arr[i]) ? __undefined_value() : arr[i];
-    s[i + 1] = __js_ToString(&val);
+    TValue val = __is_none(arr[i]) ? __undefined_value() : arr[i];
+    s[i + 1] = __js_ToString(val);
     len += __jsstr_get_length(s[i + 1]);
   }
   __jsstring *str = __js_new_string_internal(len, true);
@@ -481,7 +482,7 @@ __jsvalue __jsstr_concat(__jsvalue *this_string, __jsvalue *arr, uint32_t size) 
 }
 
 // Ecma 15.5.4.7 String.prototype.indexOf (searchString, position)
-__jsvalue __jsstr_indexOf(__jsvalue *this_string, __jsvalue *search, __jsvalue *pos) {
+TValue __jsstr_indexOf(TValue &this_string, TValue &search, TValue &pos) {
   // step 1:
   CheckObjectCoercible(this_string);
   // step 2:
@@ -519,7 +520,7 @@ __jsvalue __jsstr_indexOf(__jsvalue *this_string, __jsvalue *search, __jsvalue *
 }
 
 // Ecma 15.5.4.8 String.prototype.lastIndexOf (searchString, position)
-__jsvalue __jsstr_lastIndexOf(__jsvalue *this_string, __jsvalue *search, __jsvalue *pos) {
+TValue __jsstr_lastIndexOf(TValue &this_string, TValue &search, TValue &pos) {
   // step 1:
   CheckObjectCoercible(this_string);
   // step 2:
@@ -557,20 +558,67 @@ __jsvalue __jsstr_lastIndexOf(__jsvalue *this_string, __jsvalue *search, __jsval
 }
 
 // Ecma 15.5.4.9 String.prototype.localeCompare (that)
-__jsvalue __jsstr_localeCompare(__jsvalue *this_string, __jsvalue *that) {
-  // step 1:
-  CheckObjectCoercible(this_string);
-  // step 2:
-  __jsstring *s = __js_ToString(this_string);
-  // step 3:
-  __jsstring *t = __js_ToString(that);
+// Superceded by ECMA-402 13.1.1 String.prototype.localeCompare(that [, locales [, options]])
+TValue __jsstr_localeCompare(TValue &this_string, TValue *args, uint32_t nargs) {
+  // Keep the language spec code for ICU unicode comparison issue.
+  if (nargs < 2) {
+    // step 1:
+    CheckObjectCoercible(this_string);
+    // step 2:
+    __jsstring *s = __js_ToString(this_string);
+    // step 3:
+    TValue that;
+    if (nargs == 0) {
+      that = __undefined_value();
+    } else {
+      that = args[0];
+    }
+    __jsstring *t = __js_ToString(that);
+    // step 4:
+    return __number_value(__jsstr_compare(s, t));
+  }
 
-  // step 4;
-  return __number_value(__jsstr_compare(s, t));
+  // Intl spec code.
+  TValue locales, options;
+  // Step 1.
+  CheckObjectCoercible(this_string);
+  // Step 2.
+  TValue s = __string_value(__js_ToString(this_string));
+  // Step 3.
+  TValue that = __undefined_value();
+  if (nargs >= 2)
+    that = __string_value(__js_ToString(args[0]));
+  // Step 4.
+  if (nargs < 2)
+    locales = __undefined_value();
+  else
+    locales = args[1];
+
+  // Error checking.
+  if (__is_js_object(locales) && __jsstr_equal(__js_ToString(locales), __jsstr_new_from_char("NaN"))) {
+    MAPLE_JS_TYPEERROR_EXCEPTION();
+  }
+  if (__is_null(locales) || __is_nan(locales)) {
+    MAPLE_JS_TYPEERROR_EXCEPTION();
+  }
+  if (IsStructurallyValidLanguageTag(__js_ToString(locales))) {
+    MAPLE_JS_RANGEERROR_EXCEPTION();
+  }
+  // Step 5.
+  if (nargs < 3)
+    options = __undefined_value();
+  else
+    options = args[2];
+  // Step 6.
+  TValue undefined = __undefined_value();
+  TValue arguments[] = { locales, options };
+  TValue collator = __js_CollatorConstructor(undefined, arguments, 2);
+  // Step 7.
+  return CompareStrings(collator, s, that);
 }
 
 // Ecma 15.5.4.13 String.prototype.slice (start, end)
-__jsvalue __jsstr_slice(__jsvalue *this_string, __jsvalue *start, __jsvalue *end) {
+TValue __jsstr_slice(TValue &this_string, TValue &start, TValue &end) {
   // step 1:
   CheckObjectCoercible(this_string);
   // step 2:
@@ -620,20 +668,20 @@ __jsvalue __jsstr_slice(__jsvalue *this_string, __jsvalue *start, __jsvalue *end
   return __string_value(str);
 }
 
-static inline bool __is_regexp(__jsvalue *val) {
+static inline bool __is_regexp(TValue &val) {
   return __is_js_object(val) && (__jsval_to_object(val))->object_class == JSREGEXP;
 }
 
-static inline void __jsstr_get_regexp_patten(std::wregex &pattern, __jsvalue *regexp, bool &global) {
+static inline void __jsstr_get_regexp_patten(std::wregex &pattern, TValue &regexp, bool &global) {
   if (__is_regexp(regexp)) {
-    __jsvalue val = __jsop_getprop_by_name(regexp, __jsstr_get_builtin(JSBUILTIN_STRING_SOURCE));
-    __jsstring *pattern_str = __js_ToString(&val);
+    TValue val = __jsop_getprop_by_name(regexp, __jsstr_get_builtin(JSBUILTIN_STRING_SOURCE));
+    __jsstring *pattern_str = __js_ToString(val);
 
     val = __jsop_getprop_by_name(regexp, __jsstr_get_builtin(JSBUILTIN_STRING_GLOBAL));
-    global = __js_ToBoolean(&val);
+    global = __js_ToBoolean(val);
 
     val = __jsop_getprop_by_name(regexp, __jsstr_get_builtin(JSBUILTIN_STRING_IGNORECASE_UL));
-    bool ignore_case = __js_ToBoolean(&val);
+    bool ignore_case = __js_ToBoolean(val);
 
     std::regex::flag_type flags = std::regex::ECMAScript;
     if (ignore_case)
@@ -643,7 +691,7 @@ static inline void __jsstr_get_regexp_patten(std::wregex &pattern, __jsvalue *re
 }
 
 // Ecma 15.5.4.14 SplitMatch
-bool __jsstr_splitMatch(__jsstring *s, uint32_t *q, __jsvalue *separator, uint32_t *ret) {
+bool __jsstr_splitMatch(__jsstring *s, uint32_t *q, TValue &separator, uint32_t *ret) {
   __jsstring *r = NULL;
   // step 1:
   if (__is_js_object(separator)) {
@@ -671,9 +719,9 @@ bool __jsstr_splitMatch(__jsstring *s, uint32_t *q, __jsvalue *separator, uint32
     } else if (obj->object_class == JSSTRING) {
       r = obj->shared.prim_string;
     } else if (obj->object_class == JSOBJECT) {
-      __jsvalue val = __object_internal_DefaultValue(obj, JSTYPE_STRING);
-      if (__is_string(&val)) {
-        r = __js_ToString(&val);
+      TValue val = __object_internal_DefaultValue(obj, JSTYPE_STRING);
+      if (__is_string(val)) {
+        r = __js_ToString(val);
       }
       else {
         MAPLE_JS_TYPEERROR_EXCEPTION();
@@ -701,7 +749,7 @@ bool __jsstr_splitMatch(__jsstring *s, uint32_t *q, __jsvalue *separator, uint32
 }
 
 // Ecma 15.5.4.14 String.prototype.split (separator, limit)
-__jsvalue __jsstr_split(__jsvalue *this_string, __jsvalue *separator, __jsvalue *limit) {
+TValue __jsstr_split(TValue &this_string, TValue &separator, TValue &limit) {
   // step 1:
   CheckObjectCoercible(this_string);
   // step 2:
@@ -726,11 +774,10 @@ __jsvalue __jsstr_split(__jsvalue *this_string, __jsvalue *separator, __jsvalue 
   if (lim == 0)
     return __object_value(a);
   // step 10:
-  __jsvalue v = __string_value(s);
-  __jsvalue nv = {};
-  __set_number(&nv, 0);
+  TValue v = __string_value(s);
+  TValue nv = __number_value(0);
   if (__is_undefined(separator)) {
-    __jsobj_helper_add_value_property(a, __js_ToString(&nv), &v, JSPROP_DESC_HAS_VWEC);
+    __jsobj_helper_add_value_property(a, __js_ToString(nv), v, JSPROP_DESC_HAS_VWEC);
     return __object_value(a);
   }
   // step 11:
@@ -738,7 +785,7 @@ __jsvalue __jsstr_split(__jsvalue *this_string, __jsvalue *separator, __jsvalue 
   uint32_t q = 0;
   if (sl == 0) {
     if (!__jsstr_splitMatch(s, &q, separator, &e))
-      __jsobj_helper_add_value_property(a, __js_ToString(&nv), &v, JSPROP_DESC_HAS_VWEC);
+      __jsobj_helper_add_value_property(a, __js_ToString(nv), v, JSPROP_DESC_HAS_VWEC);
     return __object_value(a);
   }
   // step 12:
@@ -764,9 +811,9 @@ __jsvalue __jsstr_split(__jsvalue *this_string, __jsvalue *separator, __jsvalue 
           __jsstr_set_char(t, i, __jsstr_get_char(s, i + p));
         }
         // step 13.c.iii.2
-        __set_number(&nv, (int32_t)n);
+        __set_number(nv, (int32_t)n);
         v = __string_value(t);
-        __jsobj_helper_add_value_property(a, __js_ToString(&nv), &v, JSPROP_DESC_HAS_VWEC);
+        __jsobj_helper_add_value_property(a, __js_ToString(nv), v, JSPROP_DESC_HAS_VWEC);
         // step 13.c.iii.3
         __jsobj_helper_set_length(a, ++n, true);
         // step 13.c.iii.4
@@ -788,10 +835,10 @@ __jsvalue __jsstr_split(__jsvalue *this_string, __jsvalue *separator, __jsvalue 
     for (uint32_t i = 0; i < q - p; i++) {
       __jsstr_set_char(t, i, __jsstr_get_char(s, i + p));
     }
-    __set_number(&nv, (int32_t)n);
+    __set_number(nv, (int32_t)n);
     // step 15:
     v = __string_value(t);
-    __jsobj_helper_add_value_property(a, __js_ToString(&nv), &v, JSPROP_DESC_HAS_VWEC);
+    __jsobj_helper_add_value_property(a, __js_ToString(nv), v, JSPROP_DESC_HAS_VWEC);
     __jsobj_helper_set_length(a, ++n, true);
   }
   // step 16:
@@ -800,7 +847,7 @@ __jsvalue __jsstr_split(__jsvalue *this_string, __jsvalue *separator, __jsvalue 
 
 
 // Ecma 15.5.4.15 String.prototype.substring (start, end)
-__jsvalue __jsstr_substring(__jsvalue *this_string, __jsvalue *start, __jsvalue *end) {
+TValue __jsstr_substring(TValue &this_string, TValue &start, TValue &end) {
   // step 1:
   CheckObjectCoercible(this_string);
   // step 2:
@@ -845,17 +892,17 @@ __jsvalue __jsstr_substring(__jsvalue *this_string, __jsvalue *start, __jsvalue 
   return __string_value(str);
 }
 
-__jsvalue __jsstr_substr(__jsvalue *this_string, __jsvalue *start, __jsvalue *end) {
+TValue __jsstr_substr(TValue &this_string, TValue &start, TValue &end) {
   CheckObjectCoercible(this_string);
   __jsstring *s = __js_ToString(this_string);
   int32_t len = __jsstr_get_length(s);
   int32_t endIndx = (__is_undefined(end)) ? (len - 1) : (__jsval_to_int32(end) - 1);
-  __jsvalue endX = __number_value(endIndx);
-  return __jsstr_substring(this_string, start, &endX);
+  TValue endX = __number_value(endIndx);
+  return __jsstr_substring(this_string, start, endX);
 }
 
 // Ecma 15.5.4.16 String.prototype.toLowerCase ( )
-__jsvalue __jsstr_toLowerCase(__jsvalue *this_string) {
+TValue __jsstr_toLowerCase(TValue &this_string) {
   // step 1:
   CheckObjectCoercible(this_string);
   // step 2:
@@ -876,12 +923,12 @@ __jsvalue __jsstr_toLowerCase(__jsvalue *this_string) {
 }
 
 // Ecma 15.5.4.17 String.prototype.toLocaleLowerCase ( )
-__jsvalue __jsstr_toLocaleLowerCase(__jsvalue *this_string) {
+TValue __jsstr_toLocaleLowerCase(TValue &this_string) {
   return __jsstr_toLowerCase(this_string);
 }
 
 // Ecma 15.5.4.18 String.prototype.toUpperCase ( )
-__jsvalue __jsstr_toUpperCase(__jsvalue *this_string) {
+TValue __jsstr_toUpperCase(TValue &this_string) {
   // step 1:
   CheckObjectCoercible(this_string);
   // step 2:
@@ -902,12 +949,12 @@ __jsvalue __jsstr_toUpperCase(__jsvalue *this_string) {
 }
 
 // Ecma 15.5.4.19 String.prototype.toLocaleUpperCase ( )
-__jsvalue __jsstr_toLocaleUpperCase(__jsvalue *this_string) {
+TValue __jsstr_toLocaleUpperCase(TValue &this_string) {
   return __jsstr_toUpperCase(this_string);
 }
 
 // Ecma 15.5.4.20 String.prototype.trim ( )
-__jsvalue __jsstr_trim(__jsvalue *this_string) {
+TValue __jsstr_trim(TValue &this_string) {
   // step 1:
   CheckObjectCoercible(this_string);
   // step 2:
@@ -945,7 +992,7 @@ __jsvalue __jsstr_trim(__jsvalue *this_string) {
   return __string_value(str);
 }
 
-static inline void __jsstr_get_match_pattern(std::wregex &pattern, __jsvalue *regexp, bool &global) {
+static inline void __jsstr_get_match_pattern(std::wregex &pattern, TValue &regexp, bool &global) {
   __jsstring *pattern_str;
   if (__is_js_object(regexp)) {
     __jsobject *obj = __jsval_to_object(regexp);
@@ -956,8 +1003,8 @@ static inline void __jsstr_get_match_pattern(std::wregex &pattern, __jsvalue *re
       if (obj->object_class == JSSTRING) {
         pattern_str = obj->shared.prim_string;
       } else if (obj->object_class == JSOBJECT) {
-        __jsvalue val = __object_internal_DefaultValue(obj, JSTYPE_STRING);
-        pattern_str = __js_ToString(&val);
+        TValue val = __object_internal_DefaultValue(obj, JSTYPE_STRING);
+        pattern_str = __js_ToString(val);
       }
     }
   } else {
@@ -968,7 +1015,7 @@ static inline void __jsstr_get_match_pattern(std::wregex &pattern, __jsvalue *re
 }
 
 // Ecma 15.5.4.12 String.prototype.search ( )
-__jsvalue __jsstr_search(__jsvalue *this_string, __jsvalue *regexp) {
+TValue __jsstr_search(TValue &this_string, TValue &regexp) {
   // step 1:
   CheckObjectCoercible(this_string);
   // step 2:
@@ -990,7 +1037,7 @@ __jsvalue __jsstr_search(__jsvalue *this_string, __jsvalue *regexp) {
   return __number_value(ret);
 }
 
-static inline __jsvalue __jsstr_stdstr_to_value(std::wstring stdstr) {
+static inline TValue __jsstr_stdstr_to_value(std::wstring stdstr) {
     int32_t len = stdstr.length();
     if (len == 0)
       return __string_value(__jsstr_get_builtin(JSBUILTIN_STRING_EMPTY));
@@ -1014,25 +1061,25 @@ static void RegExpFree(void *ptr) {
   // GC handles this.
 }
 
-static void __jsstr_get_regexp_property(__jsvalue *regexp, __jsstring *&js_pattern,
+static void __jsstr_get_regexp_property(TValue &regexp, __jsstring *&js_pattern,
                                         bool &global, bool &ignorecase, bool &multiline,
                                         unsigned &num_captures) {
 
-  __jsvalue source = __jsop_getprop_by_name(regexp,
+  TValue source = __jsop_getprop_by_name(regexp,
                         __jsstr_get_builtin(JSBUILTIN_STRING_SOURCE));
-  js_pattern = __js_ToString(&source);
+  js_pattern = __js_ToString(source);
 
-  __jsvalue js_global = __jsop_getprop_by_name(regexp,
+  TValue js_global = __jsop_getprop_by_name(regexp,
                         __jsstr_get_builtin(JSBUILTIN_STRING_GLOBAL));
-  global = __js_ToBoolean(&js_global);
+  global = __js_ToBoolean(js_global);
 
-  __jsvalue js_ignorecase = __jsop_getprop_by_name(regexp,
+  TValue js_ignorecase = __jsop_getprop_by_name(regexp,
                   __jsstr_get_builtin(JSBUILTIN_STRING_IGNORECASE_UL));
-  ignorecase = __js_ToBoolean(&js_ignorecase);
+  ignorecase = __js_ToBoolean(js_ignorecase);
 
-  __jsvalue js_multiline = __jsop_getprop_by_name(regexp,
+  TValue js_multiline = __jsop_getprop_by_name(regexp,
                       __jsstr_get_builtin(JSBUILTIN_STRING_MULTILINE));
-  multiline = __js_ToBoolean(&js_multiline);
+  multiline = __js_ToBoolean(js_multiline);
 }
 
 static int __jsstr_regexp_exec(__jsstring *js_subject, __jsstring *js_pattern,
@@ -1075,38 +1122,38 @@ static int __jsstr_regexp_exec(__jsstring *js_subject, __jsstring *js_pattern,
 }
 
 // Ecma 15.5.4.10 String.prototype.match ( )
-__jsvalue __jsstr_match(__jsvalue *this_string, __jsvalue *regexp) {
+TValue __jsstr_match(TValue &this_string, TValue &regexp) {
   // step 1:
   CheckObjectCoercible(this_string);
-  __jsvalue val;
+  TValue val;
   if (__is_undefined(regexp)) {
-    val = __js_new_regexp_obj(NULL, NULL, 0);
-    regexp = &val;
+    val = __js_new_regexp_obj(this_string, NULL, 0);
+    regexp = val;
   } else if (!__is_regexp(regexp)) {
     __jsstring *pattern_str;
-    __jsvalue v;
+    TValue v;
     if (__is_js_object(regexp)) {
       __jsobject *obj = __jsval_to_object(regexp);
       v = __object_internal_DefaultValue(obj, JSTYPE_STRING);
-      if (!__is_string(&v)) {
-        pattern_str = __js_ToString(&v);
+      if (!__is_string(v)) {
+        pattern_str = __js_ToString(v);
         v = __string_value(pattern_str);
       }
     } else {
       pattern_str = __js_ToString(regexp);
       v = __string_value(pattern_str);
     }
-    val = __js_new_regexp_obj(NULL, &v, 1);
-    regexp = &val;
+    val = __js_new_regexp_obj(this_string, &v, 1);
+    regexp = val;
   }
   // step 2:
   __jsstring *s = __js_ToString(this_string);
 
-  __jsvalue js_global = __jsop_getprop_by_name(regexp,
+  TValue js_global = __jsop_getprop_by_name(regexp,
                         __jsstr_get_builtin(JSBUILTIN_STRING_GLOBAL));
-  bool global = __js_ToBoolean(&js_global);
+  bool global = __js_ToBoolean(js_global);
   if (!global)
-    return __jsregexp_Exec(regexp, this_string, 1);
+    return __jsregexp_Exec(regexp, this_string);
 
   std::vector<std::pair<int,int>> vres_ret;
   __jsstring *js_pattern = NULL;
@@ -1121,7 +1168,7 @@ __jsvalue __jsstr_match(__jsvalue *this_string, __jsvalue *regexp) {
   } while (r == 1 && global);
 
   if (r == -1 && vres_ret.size() == 0) {
-    __jsvalue items[1];
+    TValue items[1];
     items[0] = __undefined_value();
     __jsobject *array_obj = __js_new_arr_elems_direct(items, 1);
     return __object_value(array_obj);
@@ -1131,14 +1178,14 @@ __jsvalue __jsstr_match(__jsvalue *this_string, __jsvalue *regexp) {
   vres_ret.erase(std::unique(vres_ret.begin(), vres_ret.end()), vres_ret.end());
 
   int length = vres_ret.size();
-  __jsvalue items[length];
+  TValue items[length];
   for (int i = 0; i < length; i++) {
     int start = vres_ret[i].first, end = vres_ret[i].second;
     if (start >= 0 && end - start >= 0) {
-      __jsvalue subject_val = __string_value(s);
-      __jsvalue start_val = __number_value(start);
-      __jsvalue end_val = __number_value(end);
-      __jsvalue str_val = __jsstr_substring(&subject_val, &start_val, &end_val);
+      TValue subject_val = __string_value(s);
+      TValue start_val = __number_value(start);
+      TValue end_val = __number_value(end);
+      TValue str_val = __jsstr_substring(subject_val, start_val, end_val);
       items[i] = str_val;
     } else {
       items[i] = __undefined_value();
@@ -1147,27 +1194,27 @@ __jsvalue __jsstr_match(__jsvalue *this_string, __jsvalue *regexp) {
 
   __jsobject *array_obj = __js_new_arr_elems_direct(items, length);
 
-  __jsvalue index = __number_value(vres_ret[0].first);
-  __jsobj_helper_add_value_property(array_obj, JSBUILTIN_STRING_INDEX, &index,
+  TValue index = __number_value(vres_ret[0].first);
+  __jsobj_helper_add_value_property(array_obj, JSBUILTIN_STRING_INDEX, index,
                                     JSPROP_DESC_HAS_VWEC);
 
-  __jsvalue input = __string_value(s);
-  __jsobj_helper_add_value_property(array_obj, JSBUILTIN_STRING_INPUT, &input,
+  TValue input = __string_value(s);
+  __jsobj_helper_add_value_property(array_obj, JSBUILTIN_STRING_INPUT, input,
                                     JSPROP_DESC_HAS_VWEC);
 
   if (length > 0) {
-    __jsvalue js_last_index = __number_value(vres_ret[length - 1].second);
+    TValue js_last_index = __number_value(vres_ret[length - 1].second);
     __jsobj_helper_add_value_property(array_obj, JSBUILTIN_STRING_LASTINDEX_UL,
-                                    &js_last_index, JSPROP_DESC_HAS_VWUEUC);
+                                    js_last_index, JSPROP_DESC_HAS_VWUEUC);
   }
 
   return __object_value(array_obj);
 }
 
-static inline void __jsstr_get_replace_value(__jsvalue *func, __jsvalue *this_string, std::vector<std::pair<int,int>> &vres_ret, __jsvalue &val) {
+static inline void __jsstr_get_replace_value(TValue &func, TValue &this_string, std::vector<std::pair<int,int>> &vres_ret, TValue &val) {
   int j = 0;
-  __jsvalue match_start;
-  __jsvalue args[vres_ret.size() + 2];
+  TValue match_start;
+  TValue args[vres_ret.size() + 2];
   for (int i = 0; i < vres_ret.size(); i++) {
     int start = vres_ret[i].first;
     int end = vres_ret[i].second;
@@ -1175,30 +1222,30 @@ static inline void __jsstr_get_replace_value(__jsvalue *func, __jsvalue *this_st
       match_start = __number_value(start);
     }
     // Argument 1 is the substring that matched
-    __jsvalue subject_val = *this_string;
-    __jsvalue start_val = __number_value(start);
-    __jsvalue end_val = __number_value(end);
-    __jsvalue str_val = __jsstr_substring(&subject_val, &start_val, &end_val);
+    TValue subject_val = this_string;
+    TValue start_val = __number_value(start);
+    TValue end_val = __number_value(end);
+    TValue str_val = __jsstr_substring(subject_val, start_val, end_val);
     args[j++] = str_val;
   }
   // Argument m + 2 is the offset within string where the match occurred
   args[j++] = match_start;
   // Argument m + 3 is string
-  args[j++] = *this_string;
+  args[j++] = this_string;
 
   __jsobject *f = __jsval_to_object(func);
   __jsfunction *fun = f->shared.fun;
   if (fun == NULL || fun->attrs == 0) {
     val = __undefined_value();
   } else {
-    __jsvalue undf;
+    TValue undf;
     if (fun->attrs & JSFUNCPROP_STRICT) {
       undf = __undefined_value();
-      this_string = &undf;
+      val = __jsfun_val_call(func, undf, &args[0], j);
     } else {
-      this_string = &__js_Global_ThisBinding;
+      val = __jsfun_val_call(func, __js_Global_ThisBinding, &args[0], j);
     }
-    val = __jsfun_val_call(func, this_string, &args[0], j);
+    //val = __jsfun_val_call(func, this_string, &args[0], j);
   }
 }
 
@@ -1269,7 +1316,7 @@ static inline bool __jsstr_get_replace_substitution(std::wstring &source, std::w
 }
 
 // Ecma 15.5.4.11 String.prototype.replace ( )
-__jsvalue __jsstr_replace(__jsvalue *this_string, __jsvalue *search, __jsvalue *replace) {
+TValue __jsstr_replace(TValue &this_string, TValue &search, TValue &replace) {
   // step 1:
   CheckObjectCoercible(this_string);
   // step 2:
@@ -1281,10 +1328,10 @@ __jsvalue __jsstr_replace(__jsvalue *this_string, __jsvalue *search, __jsvalue *
     if (obj->object_class == JSSTRING) {
       replace_str = obj->shared.prim_string;
     } else {
-      __jsvalue val;
+      TValue val;
       val = __object_internal_DefaultValue(obj, JSTYPE_STRING);
-      if (__is_string(&val)) {
-        replace_str = __js_ToString(&val);
+      if (__is_string(val)) {
+        replace_str = __js_ToString(val);
       }
       else {
         MAPLE_JS_TYPEERROR_EXCEPTION();
@@ -1296,24 +1343,24 @@ __jsvalue __jsstr_replace(__jsvalue *this_string, __jsvalue *search, __jsvalue *
 
   if (!__is_regexp(search)) {
     __jsstring *pattern_str;
-    __jsvalue v;
+    TValue v;
     if (__is_js_object(search)) {
       __jsobject *obj = __jsval_to_object(search);
       v = __object_internal_DefaultValue(obj, JSTYPE_STRING);
-      if (!__is_string(&v)) {
-        pattern_str = __js_ToString(&v);
+      if (!__is_string(v)) {
+        pattern_str = __js_ToString(v);
         v = __string_value(pattern_str);
       }
     } else {
       pattern_str = __js_ToString(search);
       v = __string_value(pattern_str);
     }
-    __jsvalue val = __js_new_regexp_obj(NULL, &v, 1);
-    search = &val;
+    TValue val = __js_new_regexp_obj(this_string, &v, 1);
+    search = val;
   }
 
   std::vector<std::pair<int,int>> vres_ret;
-  __jsvalue match_start;
+  TValue match_start;
   std::wstring result = __jsstr_to_wstring(s);
   __jsstring *js_pattern = NULL;
   bool ignorecase, multiline;
@@ -1328,9 +1375,9 @@ __jsvalue __jsstr_replace(__jsvalue *this_string, __jsvalue *search, __jsvalue *
     r = __jsstr_regexp_exec(s, js_pattern, global, ignorecase, multiline, num_captures, last_index, &vres_ret);
     if (vres_ret.size() > 0) {
       if (__js_IsCallable(replace)) {
-        __jsvalue val;
+        TValue val;
         __jsstr_get_replace_value(replace, this_string, vres_ret, val);
-        replace_str = __js_ToString(&val);
+        replace_str = __js_ToString(val);
       }
 
       std::wstring rep = __jsstr_to_wstring(replace_str);

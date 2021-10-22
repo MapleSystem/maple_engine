@@ -13,7 +13,9 @@
  * See the MulanPSL - 2.0 for more details.
  */
 
+#include <stdio.h>
 #include <sys/time.h>
+#include <unicode/smpdtfmt.h>
 #include "jsglobal.h"
 #include "jsvalue.h"
 #include "jsvalueinline.h"
@@ -26,23 +28,22 @@
 #include "vmmemory.h"
 #include "jsintl.h"
 
-__jsvalue  __js_ToDate(__jsvalue *this_object, __jsvalue *arg_list, uint32_t nargs) {
+TValue  __js_ToDate(TValue &this_object, TValue *arg_list, uint32_t nargs) {
   return __js_new_date_obj(this_object, arg_list, nargs);
 }
 
 // check arglist are all zero
-static bool __js_argsZero(__jsvalue *arg_list, uint32_t nargs) {
+static bool __js_argsZero(TValue *arg_list, uint32_t nargs) {
   for (uint32_t i = 0; i < nargs; i++) {
-    __jsvalue *arg = &arg_list[i];
-    if ((arg->ptyp != JSTYPE_NUMBER) ||
-        (arg->x.i32 != 0)) {
+    TValue arg = arg_list[i];
+    if (!__is_positive_zero(arg)) {
       return false;
     }
   }
   return true;
 }
 
-__jsvalue __js_new_date_obj(__jsvalue *this_object, __jsvalue *arg_list, uint32_t nargs) {
+TValue __js_new_date_obj(TValue &this_object, TValue *arg_list, uint32_t nargs) {
   __jsobject *obj = __create_object();
   __jsobj_set_prototype(obj, JSBUILTIN_DATEPROTOTYPE);
   obj->object_class = JSDATE;
@@ -58,13 +59,15 @@ __jsvalue __js_new_date_obj(__jsvalue *this_object, __jsvalue *arg_list, uint32_
     if (__js_argsZero(arg_list, nargs)) {
         time = 0.0;
     } else {
-        __jsvalue *time_val = arg_list;
+        TValue time_val = arg_list[0];
 
         if (__is_string(time_val)) {
-            // TODO: not implemented yet
+          time = 0.0;
+          // TODO: not implemented yet
         } else {
             if (__is_nan(time_val) || __is_infinity(time_val)) {
-                return __nan_value();
+                __jsstring* invalid_date = __jsstr_new_from_char("Invalid Date");
+                return __string_value(invalid_date);
             } else {
                 int64_t v = __js_ToNumber64(time_val);
                 time = TimeClip(v);
@@ -72,28 +75,28 @@ __jsvalue __js_new_date_obj(__jsvalue *this_object, __jsvalue *arg_list, uint32_
         }
     }
   } else {
-    if (__is_nan(&arg_list[0])
-        || __is_infinity(&arg_list[0])
-        || __is_neg_infinity(&arg_list[0])) {
+    if (__is_nan(arg_list[0])
+        || __is_infinity(arg_list[0])
+        || __is_neg_infinity(arg_list[0])) {
       time = NAN;
-    } else if (__is_nan(&arg_list[1])
-        || __is_infinity(&arg_list[1])
-        || __is_neg_infinity(&arg_list[1])) {
+    } else if (__is_nan(arg_list[1])
+        || __is_infinity(arg_list[1])
+        || __is_neg_infinity(arg_list[1])) {
       time = NAN;
     } else {
-      int64_t y = (int64_t) __js_ToNumber(&arg_list[0]);
-      int64_t m = (int64_t) __js_ToNumber(&arg_list[1]);
+      int64_t y = (int64_t) __js_ToNumber(arg_list[0]);
+      int64_t m = (int64_t) __js_ToNumber(arg_list[1]);
 
       for (int i = 2; i < nargs; i++) {
-        if (__is_undefined(&arg_list[i]) || __is_nan(&arg_list[i])) {
+        if (__is_undefined(arg_list[i]) || __is_nan(arg_list[i])) {
           return __nan_value();
         }
       }
-      int64_t dt = nargs >= 3 ? (int64_t) __js_ToNumber(&arg_list[2]) : 1;
-      int64_t h = nargs >= 4 ? (int64_t) __js_ToNumber(&arg_list[3]) : 0;
-      int64_t min = nargs >= 5 ? (int64_t) __js_ToNumber(&arg_list[4]) : 0;
-      int64_t s = nargs >= 6 ? (int64_t) __js_ToNumber(&arg_list[5]) : 0;
-      int64_t milli = nargs == 7 ? (int64_t) __js_ToNumber(&arg_list[6]) : 0;
+      int64_t dt = nargs >= 3 ? (int64_t) __js_ToNumber(arg_list[2]) : 1;
+      int64_t h = nargs >= 4 ? (int64_t) __js_ToNumber(arg_list[3]) : 0;
+      int64_t min = nargs >= 5 ? (int64_t) __js_ToNumber(arg_list[4]) : 0;
+      int64_t s = nargs >= 6 ? (int64_t) __js_ToNumber(arg_list[5]) : 0;
+      int64_t milli = nargs == 7 ? (int64_t) __js_ToNumber(arg_list[6]) : 0;
 
       int64_t yr = (!std::isnan(y) && y >= 0 && y <= 99) ? 1900 + y : y;
       int64_t final_date = UTC(MakeDate(MakeDay(yr, m, dt), MakeTime(h, min, s, milli)));
@@ -187,7 +190,7 @@ int64_t TimeClip(int64_t time) {
   return time;
 }
 
-static inline __jsobject *__jsdata_value_to_obj(__jsvalue *this_date) {
+static inline __jsobject *__jsdata_value_to_obj(TValue &this_date) {
   if (!__is_js_object(this_date))
     MAPLE_JS_TYPEERROR_EXCEPTION();
 
@@ -198,7 +201,7 @@ static inline __jsobject *__jsdata_value_to_obj(__jsvalue *this_date) {
 }
 
 // ES5 15.9.5.14 Date.prototype.getDate()
-__jsvalue __jsdate_GetDate(__jsvalue *this_date) {
+TValue __jsdate_GetDate(TValue &this_date) {
   __jsobject *obj = __jsdata_value_to_obj(this_date);
   int64_t t = (int64_t) obj->shared.primDouble;
 
@@ -210,7 +213,7 @@ __jsvalue __jsdate_GetDate(__jsvalue *this_date) {
 }
 
 // ES5 15.9.5.16 Date.prototype.getDay()
-__jsvalue __jsdate_GetDay(__jsvalue *this_date) {
+TValue __jsdate_GetDay(TValue &this_date) {
   __jsobject *obj = __jsdata_value_to_obj(this_date);
   int64_t t = (int64_t) obj->shared.primDouble;
 
@@ -222,7 +225,7 @@ __jsvalue __jsdate_GetDay(__jsvalue *this_date) {
 }
 
 // ES5 15.9.5.10 Date.prototype.getFullYear()
-__jsvalue __jsdate_GetFullYear(__jsvalue *this_date) {
+TValue __jsdate_GetFullYear(TValue &this_date) {
   __jsobject *obj = __jsdata_value_to_obj(this_date);
   int64_t t = (int64_t) obj->shared.primDouble;
 
@@ -234,7 +237,7 @@ __jsvalue __jsdate_GetFullYear(__jsvalue *this_date) {
 }
 
 // ES5 15.9.5.18 Date.prototype.getHours()
-__jsvalue __jsdate_GetHours(__jsvalue *this_date) {
+TValue __jsdate_GetHours(TValue &this_date) {
   __jsobject *obj = __jsdata_value_to_obj(this_date);
   int64_t t = (int64_t) obj->shared.primDouble;
 
@@ -246,7 +249,7 @@ __jsvalue __jsdate_GetHours(__jsvalue *this_date) {
 }
 
 // ES5 15.9.5.24 Date.prototype.getMilliseconds()
-__jsvalue __jsdate_GetMilliseconds(__jsvalue *this_date) {
+TValue __jsdate_GetMilliseconds(TValue &this_date) {
   __jsobject *obj = __jsdata_value_to_obj(this_date);
   int64_t t = (int64_t) obj->shared.primDouble;
 
@@ -258,7 +261,7 @@ __jsvalue __jsdate_GetMilliseconds(__jsvalue *this_date) {
 }
 
 // ES5 15.9.5.20 Date.prototype.getMinutes()
-__jsvalue __jsdate_GetMinutes(__jsvalue *this_date) {
+TValue __jsdate_GetMinutes(TValue &this_date) {
   __jsobject *obj = __jsdata_value_to_obj(this_date);
   int64_t t = (int64_t) obj->shared.primDouble;
 
@@ -270,7 +273,7 @@ __jsvalue __jsdate_GetMinutes(__jsvalue *this_date) {
 }
 
 // ES5 15.9.5.12 Date.prototype.getMonth()
-__jsvalue __jsdate_GetMonth(__jsvalue *this_date) {
+TValue __jsdate_GetMonth(TValue &this_date) {
   __jsobject *obj = __jsdata_value_to_obj(this_date);
   int64_t t = (int64_t) obj->shared.primDouble;
 
@@ -282,7 +285,7 @@ __jsvalue __jsdate_GetMonth(__jsvalue *this_date) {
 }
 
 // ES5 15.9.5.22 Date.prototype.getSeconds()
-__jsvalue __jsdate_GetSeconds(__jsvalue *this_date) {
+TValue __jsdate_GetSeconds(TValue &this_date) {
   __jsobject *obj = __jsdata_value_to_obj(this_date);
   int64_t t = (int64_t) obj->shared.primDouble;
 
@@ -294,7 +297,7 @@ __jsvalue __jsdate_GetSeconds(__jsvalue *this_date) {
 }
 
 // ES5 15.9.5.9 Date.prototype.getTime()
-__jsvalue __jsdate_GetTime(__jsvalue *this_date) {
+TValue __jsdate_GetTime(TValue &this_date) {
   __jsobject *obj = __jsdata_value_to_obj(this_date);
   double t = obj->shared.primDouble;
 
@@ -302,7 +305,7 @@ __jsvalue __jsdate_GetTime(__jsvalue *this_date) {
 }
 
 // ES5 15.9.5.26 Date.prototype.getTimezoneOffset()
-__jsvalue __jsdate_GetTimezoneOffset(__jsvalue *this_date) {
+TValue __jsdate_GetTimezoneOffset(TValue &this_date) {
   __jsobject *obj = __jsdata_value_to_obj(this_date);
   int64_t t = (int64_t) obj->shared.primDouble;
 
@@ -314,7 +317,7 @@ __jsvalue __jsdate_GetTimezoneOffset(__jsvalue *this_date) {
 }
 
 // ES5 15.9.5.15 Date.prototype.getUTCDate()
-__jsvalue __jsdate_GetUTCDate(__jsvalue *this_date) {
+TValue __jsdate_GetUTCDate(TValue &this_date) {
   __jsobject *obj = __jsdata_value_to_obj(this_date);
   int64_t t = (int64_t) obj->shared.primDouble;
 
@@ -326,7 +329,7 @@ __jsvalue __jsdate_GetUTCDate(__jsvalue *this_date) {
 }
 
 // ES5 15.9.5.17 Date.prototype.getUTCDay()
-__jsvalue __jsdate_GetUTCDay(__jsvalue *this_date) {
+TValue __jsdate_GetUTCDay(TValue &this_date) {
   __jsobject *obj = __jsdata_value_to_obj(this_date);
   int64_t t = (int64_t) obj->shared.primDouble;
 
@@ -338,7 +341,7 @@ __jsvalue __jsdate_GetUTCDay(__jsvalue *this_date) {
 }
 
 // ES5 15.9.5.11 Date.prototype.getUTCFullYear()
-__jsvalue __jsdate_GetUTCFullYear(__jsvalue *this_date) {
+TValue __jsdate_GetUTCFullYear(TValue &this_date) {
   __jsobject *obj = __jsdata_value_to_obj(this_date);
   int64_t t = (int64_t) obj->shared.primDouble;
 
@@ -350,7 +353,7 @@ __jsvalue __jsdate_GetUTCFullYear(__jsvalue *this_date) {
 }
 
 // ES5 15.9.5.19 Date.prototype.getUTCHours()
-__jsvalue __jsdate_GetUTCHours(__jsvalue *this_date) {
+TValue __jsdate_GetUTCHours(TValue &this_date) {
   __jsobject *obj = __jsdata_value_to_obj(this_date);
   int64_t t = (int64_t) obj->shared.primDouble;
 
@@ -362,7 +365,7 @@ __jsvalue __jsdate_GetUTCHours(__jsvalue *this_date) {
 }
 
 // ES5 15.9.5.25 Date.prototype.getUTCMilliseconds()
-__jsvalue __jsdate_GetUTCMilliseconds(__jsvalue *this_date) {
+TValue __jsdate_GetUTCMilliseconds(TValue &this_date) {
   __jsobject *obj = __jsdata_value_to_obj(this_date);
   int64_t t = (int64_t) obj->shared.primDouble;
 
@@ -374,7 +377,7 @@ __jsvalue __jsdate_GetUTCMilliseconds(__jsvalue *this_date) {
 }
 
 // ES5 15.9.5.21 Date.prototype.getUTCMinutes()
-__jsvalue __jsdate_GetUTCMinutes(__jsvalue *this_date) {
+TValue __jsdate_GetUTCMinutes(TValue &this_date) {
   __jsobject *obj = __jsdata_value_to_obj(this_date);
   int64_t t = (int64_t) obj->shared.primDouble;
 
@@ -386,7 +389,7 @@ __jsvalue __jsdate_GetUTCMinutes(__jsvalue *this_date) {
 }
 
 // ES5 15.9.5.13 Date.prototype.getUTCMonth()
-__jsvalue __jsdate_GetUTCMonth(__jsvalue *this_date) {
+TValue __jsdate_GetUTCMonth(TValue &this_date) {
   __jsobject *obj = __jsdata_value_to_obj(this_date);
   int64_t t = (int64_t) obj->shared.primDouble;
 
@@ -398,7 +401,7 @@ __jsvalue __jsdate_GetUTCMonth(__jsvalue *this_date) {
 }
 
 // ES5 15.9.5.23 Date.prototype.getUTCSeconds()
-__jsvalue __jsdate_GetUTCSeconds(__jsvalue *this_date) {
+TValue __jsdate_GetUTCSeconds(TValue &this_date) {
   __jsobject *obj = __jsdata_value_to_obj(this_date);
   int64_t t = (int64_t) obj->shared.primDouble;
 
@@ -410,119 +413,119 @@ __jsvalue __jsdate_GetUTCSeconds(__jsvalue *this_date) {
 }
 
 // ES5 15.9.5.36 Date.prototype.setDate(date)
-__jsvalue __jsdate_SetDate(__jsvalue *this_date, __jsvalue *value) {
+TValue __jsdate_SetDate(TValue &this_date, TValue &value) {
   // TODO: not implemented yet
   __jsobject *obj = __jsdata_value_to_obj(this_date);
   return __object_value(obj);
 }
 
 // ES5 15.9.5.40 Date.prototype.setFullYear(year [, month [, date ]])
-__jsvalue __jsdate_SetFullYear(__jsvalue *this_date, __jsvalue *args, uint32_t nargs) {
+TValue __jsdate_SetFullYear(TValue &this_date, TValue *args, uint32_t nargs) {
   // TODO: not implemented yet
   __jsobject *obj = __jsdata_value_to_obj(this_date);
   return __object_value(obj);
 }
 
 // ES5 15.9.5.34 Date.prototype.setHours(hour [, min [, sec [, ms ]]])
-__jsvalue __jsdate_SetHours(__jsvalue *this_date, __jsvalue *args, uint32_t nargs) {
+TValue __jsdate_SetHours(TValue &this_date, TValue *args, uint32_t nargs) {
   // TODO: not implemented yet
   __jsobject *obj = __jsdata_value_to_obj(this_date);
   return __object_value(obj);
 }
 
 // ES5 15.9.5.28 Date.prototype.setMilliseconds(ms)
-__jsvalue __jsdate_SetMilliseconds(__jsvalue *this_date, __jsvalue *value) {
+TValue __jsdate_SetMilliseconds(TValue &this_date, TValue &value) {
   // TODO: not implemented yet
   __jsobject *obj = __jsdata_value_to_obj(this_date);
   return __object_value(obj);
 }
 
 // ES5 15.9.5.32 Date.prototype.setMinutes(min [, sec [, ms ]])
-__jsvalue __jsdate_SetMinutes(__jsvalue *this_date, __jsvalue *args, uint32_t nargs) {
+TValue __jsdate_SetMinutes(TValue &this_date, TValue *args, uint32_t nargs) {
   // TODO: not implemented yet
   __jsobject *obj = __jsdata_value_to_obj(this_date);
   return __object_value(obj);
 }
 
 // ES5 15.9.5.38 Date.prototype.setMonth(month [, date ])
-__jsvalue __jsdate_SetMonth(__jsvalue *this_date, __jsvalue *args, uint32_t nargs) {
+TValue __jsdate_SetMonth(TValue &this_date, TValue *args, uint32_t nargs) {
   // TODO: not implemented yet
   __jsobject *obj = __jsdata_value_to_obj(this_date);
   return __object_value(obj);
 }
 
 // ES5 15.9.5.30 Date.prototype.setSeconds(sec [, ms ])
-__jsvalue __jsdate_SetSeconds(__jsvalue *this_date, __jsvalue *args, uint32_t nargs) {
+TValue __jsdate_SetSeconds(TValue &this_date, TValue *args, uint32_t nargs) {
   // TODO: not implemented yet
   __jsobject *obj = __jsdata_value_to_obj(this_date);
   return __object_value(obj);
 }
 
 // ES5 15.9.5.27 Dte.prototype.setTime(time)
-__jsvalue __jsdate_SetTime(__jsvalue *this_date, __jsvalue *value) {
+TValue __jsdate_SetTime(TValue &this_date, TValue &value) {
   // TODO: not implemented yet
   __jsobject *obj = __jsdata_value_to_obj(this_date);
   return __object_value(obj);
 }
 
 // ES5 15.9.5.37 Date.prototype.setUTCDate(date)
-__jsvalue __jsdate_SetUTCDate(__jsvalue *this_date, __jsvalue *value) {
+TValue __jsdate_SetUTCDate(TValue &this_date, TValue &value) {
   // TODO: not implemented yet
   __jsobject *obj = __jsdata_value_to_obj(this_date);
   return __object_value(obj);
 }
 
 // ES5 15.9.5.41 Date.prototype.setUTCFullYear(year [, month [, date ]])
-__jsvalue __jsdate_SetUTCFullYear(__jsvalue *this_date, __jsvalue *args, uint32_t nargs) {
+TValue __jsdate_SetUTCFullYear(TValue &this_date, TValue *args, uint32_t nargs) {
   // TODO: not implemented yet
   __jsobject *obj = __jsdata_value_to_obj(this_date);
   return __object_value(obj);
 }
 
 // ES5 15.9.5.35 Date.prototype.setUTCHours(hour [, min [, sec [, ms ]]])
-__jsvalue __jsdate_SetUTCHours(__jsvalue *this_date, __jsvalue *args, uint32_t nargs) {
+TValue __jsdate_SetUTCHours(TValue &this_date, TValue *args, uint32_t nargs) {
   // TODO: not implemented yet
   __jsobject *obj = __jsdata_value_to_obj(this_date);
   return __object_value(obj);
 }
 
 // ES5 15.9.5.29 Date.prototype.setUTCMilliseconds(ms)
-__jsvalue __jsdate_SetUTCMilliseconds(__jsvalue *this_date, __jsvalue *value) {
+TValue __jsdate_SetUTCMilliseconds(TValue &this_date, TValue &value) {
   // TODO: not implemented yet
   __jsobject *obj = __jsdata_value_to_obj(this_date);
   return __object_value(obj);
 }
 
 // ES5 15.9.5.33 Date.prototype.setUTCMinutes(min [, sec [, ms ]])
-__jsvalue __jsdate_SetUTCMinutes(__jsvalue *this_date, __jsvalue *args, uint32_t nargs) {
+TValue __jsdate_SetUTCMinutes(TValue &this_date, TValue *args, uint32_t nargs) {
   // TODO: not implemented yet
   __jsobject *obj = __jsdata_value_to_obj(this_date);
   return __object_value(obj);
 }
 
 // ES5 15.9.5.39 Date.prototype.setUTCMonth(month [, date ])
-__jsvalue __jsdate_SetUTCMonth(__jsvalue *this_date, __jsvalue *args, uint32_t nargs) {
+TValue __jsdate_SetUTCMonth(TValue &this_date, TValue *args, uint32_t nargs) {
   // TODO: not implemented yet
   __jsobject *obj = __jsdata_value_to_obj(this_date);
   return __object_value(obj);
 }
 
 // ES5 15.9.5.31 Date.prototype.setUTCSeconds(sec [, ms ])
-__jsvalue __jsdate_SetUTCSeconds(__jsvalue *this_date, __jsvalue *args, uint32_t nargs) {
+TValue __jsdate_SetUTCSeconds(TValue &this_date, TValue *args, uint32_t nargs) {
   // TODO: not implemented yet
   __jsobject *obj = __jsdata_value_to_obj(this_date);
   return __object_value(obj);
 }
 
 // ES5 15.9.5.3 Date.prototype.toDateString()
-__jsvalue __jsdate_ToDateString(__jsvalue *this_date) {
+TValue __jsdate_ToDateString(TValue &this_date) {
   // TODO: not implemented yet
   __jsobject *obj = __jsdata_value_to_obj(this_date);
   return __object_value(obj);
 }
 
 // ES5 15.9.5.6 Date.prototype.toLocaleDateString()
-__jsvalue __jsdate_ToLocaleDateString(__jsvalue *this_date, __jsvalue *arg_list, uint32_t nargs) {
+TValue __jsdate_ToLocaleDateString(TValue &this_date, TValue *arg_list, uint32_t nargs) {
 
   // Check this_date.
   if (__is_undefined(this_date) || __is_null(this_date) || !__is_js_object(this_date)) {
@@ -532,7 +535,7 @@ __jsvalue __jsdate_ToLocaleDateString(__jsvalue *this_date, __jsvalue *arg_list,
     MAPLE_JS_TYPEERROR_EXCEPTION();
   }
 
-  __jsvalue locales, options;
+  TValue locales, options;
 
   if (nargs == 1) {
     locales = arg_list[0];
@@ -541,9 +544,9 @@ __jsvalue __jsdate_ToLocaleDateString(__jsvalue *this_date, __jsvalue *arg_list,
     options = arg_list[1];
   }
   // Step 1.
-  __jsvalue x = *this_date;
+  TValue x = __double_value(__jsval_to_object(this_date)->shared.primDouble);
   // Step 2.
-  if (__is_nan(&x)) {
+  if (__is_nan(x)) {
     return StrToVal("Invalid Date");
   }
   // Step 3.
@@ -556,45 +559,51 @@ __jsvalue __jsdate_ToLocaleDateString(__jsvalue *this_date, __jsvalue *arg_list,
   }
 
   // Check if 'locales' is valid (JSI9502).
-  locales = CanonicalizeLocaleList(&locales);
+  locales = CanonicalizeLocaleList(locales);
 
   // Check if 'options' are undefined.
-  if (!__is_undefined(&options)) {
-    __jsvalue p = StrToVal("localeMatcher");
-    __jsvalue v = __jsop_getprop(&options, &p);
+  if (!__is_undefined(options)) {
+    TValue p = StrToVal("localeMatcher");
+    TValue v = __jsop_getprop(options, p);
     // Check if 'localeMatcher' in 'options' is null (JSI9502).
-    if (__is_null(&v)) {
+    if (__is_null(v)) {
       MAPLE_JS_RANGEERROR_EXCEPTION();
     }
   }
 
   // Step 5.
-  __jsvalue required = StrToVal("date");
-  __jsvalue defaults = StrToVal("date");
-  options = ToDateTimeOptions(&options, &required, &defaults);
+  TValue required = StrToVal("date");
+  TValue defaults = StrToVal("date");
+  options = ToDateTimeOptions(options, required, defaults);
 
   // Step 6.
-  __jsvalue undefined_val = __undefined_value();
-  __jsvalue args[] = {locales, options};
-  __jsvalue date_time_format = __js_DateTimeFormatConstructor(&undefined_val, args, 2);
+  TValue undefined_val = __undefined_value();
+  TValue args[] = {locales, options};
+  TValue date_time_format = __js_DateTimeFormatConstructor(undefined_val, args, 2);
 
   // Step 7.
-  return FormatDateTime(&date_time_format, &x);
+  return FormatDateTime(date_time_format, x);
 }
 
 // ES5 15.9.5.5 Date.prototype.toLocaleString()
 // ECMA-402 13.3.1 Date.prototype.toLocaleString([locales [, options]])
-__jsvalue __jsdate_ToLocaleString(__jsvalue *this_date, __jsvalue *arg_list, uint32_t nargs) {
+TValue __jsdate_ToLocaleString(TValue &this_date, TValue *arg_list, uint32_t nargs) {
 
   // Check this_date.
   if (__is_undefined(this_date) || __is_null(this_date) || !__is_js_object(this_date)) {
     MAPLE_JS_TYPEERROR_EXCEPTION();
   }
+  // Check if 'this_date' is 'Invalid Date'.
+  if (__jsval_to_object(this_date)->object_class == JSSTRING) {
+    if (__jsstr_equal(__js_ToString(this_date), __jsstr_new_from_char("Invalid Date"))) {
+      return this_date;
+    }
+  }
   if (__jsval_to_object(this_date)->object_class != JSDATE) {
     MAPLE_JS_TYPEERROR_EXCEPTION();
   }
 
-  __jsvalue locales, options;
+  TValue locales, options;
 
   if (nargs == 1) {
     locales = arg_list[0];
@@ -603,9 +612,9 @@ __jsvalue __jsdate_ToLocaleString(__jsvalue *this_date, __jsvalue *arg_list, uin
     options = arg_list[1];
   }
   // Step 1.
-  __jsvalue x = *this_date;
+  TValue x = __double_value(__jsval_to_object(this_date)->shared.primDouble);
   // Step 2.
-  if (__is_nan(&x)) {
+  if (__is_nan(x)) {
     return StrToVal("Invalid Date");
   }
   // Step 3.
@@ -618,32 +627,32 @@ __jsvalue __jsdate_ToLocaleString(__jsvalue *this_date, __jsvalue *arg_list, uin
   }
 
   // Check if 'locales' is valid (JSI9502).
-  locales = CanonicalizeLocaleList(&locales);
+  locales = CanonicalizeLocaleList(locales);
 
   // Check if 'options' is undefined (JSI9416).
-  if (!__is_undefined(&options)) {
-    __jsvalue p = StrToVal("localeMatcher");
-    __jsvalue v = __jsop_getprop(&options, &p);
+  if (!__is_undefined(options)) {
+    TValue p = StrToVal("localeMatcher");
+    TValue v = __jsop_getprop(options, p);
     // Check if 'localeMatcher' in 'options' is null (JSI9502).
-    if (__is_null(&v)) {
+    if (__is_null(v)) {
       MAPLE_JS_RANGEERROR_EXCEPTION();
     }
   }
 
   // Step 5.
-  __jsvalue required = StrToVal("any");
-  __jsvalue defaults = StrToVal("all");
-  options = ToDateTimeOptions(&options, &required, &defaults);
+  TValue required = StrToVal("any");
+  TValue defaults = StrToVal("all");
+  options = ToDateTimeOptions(options, required, defaults);
   // Step 6.
-  __jsvalue undefined_val = __undefined_value();
-  __jsvalue args[] = {locales, options};
-  __jsvalue date_time_format = __js_DateTimeFormatConstructor(&undefined_val, args, 2);
+  TValue undefined_val = __undefined_value();
+  TValue args[] = {locales, options};
+  TValue date_time_format = __js_DateTimeFormatConstructor(undefined_val, args, 2);
   // Step 7.
-  return FormatDateTime(&date_time_format, &x);
+  return FormatDateTime(date_time_format, x);
 }
 
 // ES5 15.9.5.7 Date.prototype.toLocaleTimeString()
-__jsvalue __jsdate_ToLocaleTimeString(__jsvalue *this_date, __jsvalue *arg_list, uint32_t nargs) {
+TValue __jsdate_ToLocaleTimeString(TValue &this_date, TValue *arg_list, uint32_t nargs) {
 
   // Check this_date.
   if (__is_undefined(this_date) || __is_null(this_date) || !__is_js_object(this_date)) {
@@ -653,7 +662,7 @@ __jsvalue __jsdate_ToLocaleTimeString(__jsvalue *this_date, __jsvalue *arg_list,
     MAPLE_JS_TYPEERROR_EXCEPTION();
   }
 
-  __jsvalue locales, options;
+  TValue locales, options;
 
   if (nargs == 1) {
     locales = arg_list[0];
@@ -662,9 +671,9 @@ __jsvalue __jsdate_ToLocaleTimeString(__jsvalue *this_date, __jsvalue *arg_list,
     options = arg_list[1];
   }
   // Step 1.
-  __jsvalue x = *this_date;
+  TValue x = __double_value(__jsval_to_object(this_date)->shared.primDouble);
   // Step 2.
-  if (__is_nan(&x)) {
+  if (__is_nan(x)) {
     return StrToVal("Invalid Date");
   }
   // Step 3.
@@ -677,48 +686,48 @@ __jsvalue __jsdate_ToLocaleTimeString(__jsvalue *this_date, __jsvalue *arg_list,
   }
  
   // Check if 'locales' is valid (JSI9502).
-  locales = CanonicalizeLocaleList(&locales);
+  locales = CanonicalizeLocaleList(locales);
 
   // Check if 'options' is undefined (JSI9416).
-  if (!__is_undefined(&options)) {
-    __jsvalue p = StrToVal("localeMatcher");
-    __jsvalue v = __jsop_getprop(&options, &p);
+  if (!__is_undefined(options)) {
+    TValue p = StrToVal("localeMatcher");
+    TValue v = __jsop_getprop(options, p);
     // Check if 'localeMatcher' in 'options' is null (JSI9502).
-    if (__is_null(&v)) {
+    if (__is_null(v)) {
       MAPLE_JS_RANGEERROR_EXCEPTION();
     }
   }
 
   // Step 5.
-  __jsvalue required = StrToVal("time");
-  __jsvalue defaults = StrToVal("time");
-  options = ToDateTimeOptions(&options, &required, &defaults);
+  TValue required = StrToVal("time");
+  TValue defaults = StrToVal("time");
+  options = ToDateTimeOptions(options, required, defaults);
 
   // Step 6.
-  __jsvalue undefined_val = __undefined_value();
-  __jsvalue args[] = {locales, options};
-  __jsvalue date_time_format = __js_DateTimeFormatConstructor(&undefined_val, args, 2);
+  TValue undefined_val = __undefined_value();
+  TValue args[] = {locales, options};
+  TValue date_time_format = __js_DateTimeFormatConstructor(undefined_val, args, 2);
 
   // Step 7.
-  return FormatDateTime(&date_time_format, &x);
+  return FormatDateTime(date_time_format, x);
 }
 
 // ES5 B.2.4 Date.prototype.getYea()
-__jsvalue __jsdate_GetYear(__jsvalue *this_date) {
+TValue __jsdate_GetYear(TValue &this_date) {
   // TODO: not implemented yet
   __jsobject *obj = __jsdata_value_to_obj(this_date);
   return __object_value(obj);
 }
 
 // ES5 B.2.5 Date.prototype.setYear()
-__jsvalue __jsdate_SetYear(__jsvalue *this_date,  __jsvalue *value) {
+TValue __jsdate_SetYear(TValue &this_date,  TValue &value) {
   // TODO: not implemented yet
   __jsobject *obj = __jsdata_value_to_obj(this_date);
   return __object_value(obj);
 }
 
 // ES5 B.2.6 Date.prototype.toGMTString()
-__jsvalue __jsdate_ToGMTString(__jsvalue *this_date) {
+TValue __jsdate_ToGMTString(TValue &this_date) {
   // TODO: not implemented yet
   __jsobject *obj = __jsdata_value_to_obj(this_date);
   return __object_value(obj);
@@ -728,7 +737,7 @@ const char *WeekDays[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
 const char *Months[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
 
 
-__jsvalue __jsdate_ToString_Obj(__jsobject *obj) {
+TValue __jsdate_ToString_Obj(__jsobject *obj) {
   int64_t time = LocalTime((int64_t) obj->shared.primDouble);
   if (time < -9007199254740992 || time > 9007199254740992)
     MAPLE_JS_RANGEERROR_EXCEPTION();
@@ -752,27 +761,27 @@ __jsvalue __jsdate_ToString_Obj(__jsobject *obj) {
   return __string_value(__jsstr_new_from_char(buf));
 }
 // ES5 15.9.5.2 Date.prototype.toString()
-__jsvalue __jsdate_ToString(__jsvalue *this_date) {
+TValue __jsdate_ToString(TValue &this_date) {
   __jsobject *obj = __jsdata_value_to_obj(this_date);
   return __jsdate_ToString_Obj(obj);
 }
 
 // ES5 15.9.5.4 Date.prototype.toTimeString()
-__jsvalue __jsdate_ToTimeString(__jsvalue *this_date) {
+TValue __jsdate_ToTimeString(TValue &this_date) {
   // TODO: not implemented yet
   __jsobject *obj = __jsdata_value_to_obj(this_date);
   return __object_value(obj);
 }
 
 // ES5 15.9.5.42 Date.prototype.toUTCString()
-__jsvalue __jsdate_ToUTCString(__jsvalue *this_date) {
+TValue __jsdate_ToUTCString(TValue &this_date) {
   // TODO: not implemented yet
   __jsobject *obj = __jsdata_value_to_obj(this_date);
   return __object_value(obj);
 }
 
 // ES5 15.9.5.8 Date.prototype.valueOf()
-__jsvalue __jsdate_ValueOf(__jsvalue *this_date) {
+TValue __jsdate_ValueOf(TValue &this_date) {
   __jsobject *obj = __jsdata_value_to_obj(this_date);
   int64_t t = (int64_t) obj->shared.primDouble;
 
@@ -780,7 +789,7 @@ __jsvalue __jsdate_ValueOf(__jsvalue *this_date) {
 }
 
 // ES5 15.9.5.43 Date.prototype.toISOString()
-__jsvalue __jsdate_ToISOString(__jsvalue *this_date) {
+TValue __jsdate_ToISOString(TValue &this_date) {
   __jsobject *obj = __jsdata_value_to_obj(this_date);
 
   int64_t time = (int64_t) obj->shared.primDouble;
@@ -805,33 +814,68 @@ __jsvalue __jsdate_ToISOString(__jsvalue *this_date) {
 
 // ES5 15.9.4.3
 // Date.UTC(year, month [, date [, hours [, minutes [, seconds [, ms ]]]]])
-__jsvalue __jsdate_UTC(__jsvalue *this_date, __jsvalue *args, uint32_t nargs) {
+TValue __jsdate_UTC(TValue &this_date, TValue *args, uint32_t nargs) {
   // TODO: not implemented yet
   __jsobject *obj = __jsdata_value_to_obj(this_date);
   return __double_value(0);
 }
 
 // ES5 15.9.5.44 Date.prototype.toJSON(key)
-__jsvalue __jsdate_ToJSON(__jsvalue *this_date, __jsvalue *value) {
+TValue __jsdate_ToJSON(TValue &this_date, TValue &value) {
   // TODO: not implemented yet
   __jsobject *obj = __jsdata_value_to_obj(this_date);
   return __object_value(obj);
 }
 
 // ES5 15.9.4.4 Date.now()
-__jsvalue __jsdate_Now(__jsvalue *this_date) {
+TValue __jsdate_Now(void) {
   // Basic Date implementation may need more scrutiny
   struct timeval current_time;
   gettimeofday(&current_time, NULL);
-  return __double_value((current_time.tv_sec * 1000000 + current_time.tv_usec)/1000);
+  int64_t t = current_time.tv_sec * 1000L + current_time.tv_usec / 1000L; // in ms.
+  return __double_value(t);
 }
 
 // ES5 15.9.4.2 Date.parse(string)
-__jsvalue __jsdate_Parse(__jsvalue *this_date, __jsvalue *value) {
-  // TODO: not implemented yet
+TValue __jsdate_Parse(TValue &this_date, TValue &value) {
   __jsstring *date_str = __js_ToString(value);
+  uint16_t len = date_str->length;
 
-  return __double_value(0);
+  // Try ISO string type first.
+  UnicodeString pattern("Y-M-d'T'H:m:sZZZZZ");
+  UErrorCode status = U_ZERO_ERROR;
+  SimpleDateFormat *parser = new SimpleDateFormat(pattern, status);
+  if (U_FAILURE(status)) {
+    MAPLE_JS_ASSERT(false && "Error in SimpleDateFormat()");
+  }
+  UnicodeString source;
+  if (date_str->kind == JSSTRING_UNICODE) {
+    for (int i = 0; i < len; i++) {
+      source.append(date_str->x.utf16[i]);
+    }
+  } else {
+    for (int i = 0; i < len; i++) {
+      source.append(date_str->x.ascii[i]);
+    }
+  }
+  status = U_ZERO_ERROR;
+  UDate date = parser->parse(source, status);
+  if (! U_FAILURE(status)) {
+    return __double_value((uint64_t) date);
+  }
+  // Try string parsing then.
+  struct tm tm;
+  char buf[255];
+  char *d;
+  memset(&tm, 0, sizeof(struct tm));
+  if (date_str->kind == JSSTRING_UNICODE) {
+    MAPLE_JS_ASSERT(false && "NYI");
+  } else {
+    d = date_str->x.ascii;
+  }
+  strptime(d, "%a, %d %b %Y %H:%M:%S %z", &tm);
+  int64_t t = mktime(&tm) * 1000L;
+  return __double_value((double) t);
 }
 
 // ES5 15.9.1.2
@@ -1061,7 +1105,7 @@ int64_t WeekDay(int64_t t) {
 }
 
 // 15.9.2 The Date Constructor called as a function, return a string
-__jsvalue __js_new_dateconstructor(__jsvalue *this_object, __jsvalue *arg_list, uint32_t nargs) {
-  __jsvalue dateVal = __js_new_date_obj(this_object, arg_list, nargs);
-  return __jsdate_ToString(&dateVal);
+TValue __js_new_dateconstructor(TValue &this_object, TValue *arg_list, uint32_t nargs) {
+  TValue dateVal = __js_new_date_obj(this_object, arg_list, nargs);
+  return __jsdate_ToString(dateVal);
 }

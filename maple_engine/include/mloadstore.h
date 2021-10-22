@@ -20,6 +20,7 @@
 #include "mvalue.h"
 
 #define MVALUEBITMASK(val) (val).x.u64 &= maple::primtype_masks[(val).ptyp]
+#define TVALUEBITMASK(val) (val).x.u64 &= maple::primtype_masks[GET_TYPE(val)]
 
 namespace maple {
     extern const uint64_t primtype_masks[];

@@ -23,8 +23,8 @@
 #include "jsdate.h"
 #include "jsintl.h"
 
-void __jsop_print_item(__jsvalue value) {
-  switch (__jsval_typeof(&value)) {
+void __jsop_print_item(TValue value) {
+  switch (__jsval_typeof(value)) {
     case JSTYPE_UNDEFINED:
     case JSTYPE_NONE:
       printf("undefined");
@@ -33,21 +33,21 @@ void __jsop_print_item(__jsvalue value) {
       printf("null");
       break;
     case JSTYPE_BOOLEAN: {
-      const char *str = __jsval_to_boolean(&value) ? "true" : "false";
+      const char *str = __jsval_to_boolean(value) ? "true" : "false";
       printf("%s", str);
       break;
     }
     case JSTYPE_STRING: {
-      __jsstring *str = __jsval_to_string(&value);
+      __jsstring *str = __jsval_to_string(value);
       __jsstr_print(str);
       break;
     }
     case JSTYPE_NUMBER:
-      printf("%d", __jsval_to_number(&value));
+      printf("%d", __jsval_to_number(value));
       break;
     case JSTYPE_OBJECT: {
-      // __jsvalue v = __jsobj_pt_toString(&value);
-      __jsobject *obj = __jsval_to_object(&value);
+      // TValue v = __jsobj_pt_toString(&value);
+      __jsobject *obj = __jsval_to_object(value);
       if (obj->object_class == JSNUMBER && obj->object_type == JSSPECIAL_NUMBER_OBJECT) {
         __jsstr_print(obj->shared.prim_string);
       } else if (obj->object_class == JSNUMBER || obj->object_class == JSBOOLEAN) {
@@ -55,14 +55,14 @@ void __jsop_print_item(__jsvalue value) {
       } else if (obj->object_class == JSDOUBLE) {
         printf("%.16g", obj->shared.primDouble);
       } else if (obj->object_class == JSDATE) {
-        __jsvalue v = __jsdate_ToString(&value);
+        TValue v = __jsdate_ToString(value);
         __jsop_print_item(v);
-	memory_manager->RecallString(__jsval_to_string(&v));
+	memory_manager->RecallString(__jsval_to_string(v));
       } else {
-        __jsvalue v = __js_ToPrimitive(&value, JSTYPE_UNDEFINED /* ??? */);
+        TValue v = __js_ToPrimitive(value, JSTYPE_UNDEFINED /* ??? */);
         __jsop_print_item(v);
-        if(!__is_undefined(&v))
-            memory_manager->RecallString(__jsval_to_string(&v));
+        if(!__is_undefined(v))
+            memory_manager->RecallString(__jsval_to_string(v));
       }
       break;
     }
@@ -75,7 +75,7 @@ void __jsop_print_item(__jsvalue value) {
       break;
     }
     case JSTYPE_INFINITY: {
-      if (__is_neg_infinity(&value))
+      if (__is_neg_infinity(value))
         printf("-Infinity");
       else
         printf("Infinity");
@@ -86,7 +86,7 @@ void __jsop_print_item(__jsvalue value) {
   }
 }
 
-__jsvalue __jsop_print(__jsvalue *array, uint32_t size) {
+TValue __jsop_print(TValue *array, uint32_t size) {
   for (uint32_t i = 0; i < size; i++) {
     __jsop_print_item(array[i]);
     if (i != size - 1)
@@ -96,7 +96,7 @@ __jsvalue __jsop_print(__jsvalue *array, uint32_t size) {
   return __undefined_value();
 }
 
-__jsvalue __js_error(__jsvalue *array, uint32_t size) {
+TValue __js_error(TValue *array, uint32_t size) {
   for (uint32_t i = 0; i < size; i++) {
     __jsop_print_item(array[i]);
     if (i != size - 1)

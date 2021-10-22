@@ -276,12 +276,12 @@ class MemoryManager {
   // Fixme: These recall functions should not be defined here.
   // Move these to jsobjet.cpp.
   void RecallString(__jsstring *);
-  void RecallArray_props(__jsvalue *);
+  void RecallArray_props(TValue *);
   void RecallList(__json_list *);
 
   // function for garbage collection
   void ManageChildObj(__jsobject *obj, ManageType flag);
-  void ManageJsvalue(__jsvalue *val, ManageType flag);
+  void ManageJsvalue(TValue &val, ManageType flag);
   void ManageEnvironment(void *envptr, ManageType flag);
   void ManageProp(__jsprop *prop, ManageType flag);
   void ManageObject(__jsobject *obj, ManageType flag);
@@ -298,7 +298,7 @@ class MemoryManager {
   void Mark();
   void Sweep();
   void MarkAndSweep();
-  bool NotMarkedObject(__jsvalue *val);
+  bool NotMarkedObject(TValue &val);
 #endif
 
 // GC related
@@ -306,14 +306,14 @@ class MemoryManager {
   void UpdateGCReference(void *, Mval);
 #endif
   void GCDecRf(void *);
-  void GCDecRfJsvalue(__jsvalue jsval) {
+  void GCDecRfJsvalue(TValue jsval) {
     if (TurnoffGC())
       return;
-    __jstype ptyp = (__jstype)jsval.ptyp;
+    __jstype ptyp = (__jstype)GET_TYPE(jsval);
     switch (ptyp) {
       case JSTYPE_OBJECT:
       case JSTYPE_STRING:
-        GCDecRf((jsval.x.obj));
+        GCDecRf((void*)GET_PAYLOAD(jsval));
       default:
         assert(false && "unexpected");
     }
@@ -330,9 +330,8 @@ class MemoryManager {
   void GCIncRf(void *addr) {
     if (TurnoffGC())
       return;
-    void* true_addr = (void*)((uint64_t)addr & PAYLOAD_MASK);
-    if (IsHeap(true_addr)) {
-      MemHeader &header = GetMemHeader(true_addr);
+    if (IsHeap(addr)) {
+      MemHeader &header = GetMemHeader(addr);
       if(header.refcount < UINT14_MAX)
         header.refcount++;
 #ifdef MM_DEBUG
@@ -340,19 +339,19 @@ class MemoryManager {
       num_rcinc++;
 #endif
 #ifdef MEMORY_LEAK_CHECK
-      if (header.refcount > live_objects[true_addr])
-        live_objects[true_addr] = header.refcount;
+      if (header.refcount > live_objects[addr])
+        live_objects[addr] = header.refcount;
 //printf("addr= %p RC incto= %d  max= %d\n", true_addr, header.refcount, live_objects[true_addr]);
 #endif
 #endif
     }
   }
-  void GCIncRfJsvalue(__jsvalue jsval) {
-    __jstype ptyp = (__jstype)jsval.ptyp;
+  void GCIncRfJsvalue(TValue jsval) {
+    __jstype ptyp = (__jstype)GET_TYPE(jsval);
     switch (ptyp) {
       case JSTYPE_OBJECT:
       case JSTYPE_STRING:
-        GCIncRf((jsval.x.obj));
+        GCIncRf((void*)GET_PAYLOAD(jsval));
       default:
         assert(false && "unexpected");
     }
@@ -399,7 +398,7 @@ class MemoryManager {
     return addrOffset++;
   }
 
-  __jsvalue GetF64Builtin(uint32_t);
+  //TValue GetF64Builtin(uint32_t);
   void SetF64Builtin();
   double GetF64FromU32 (uint32);
   uint64_t SetF64ToU32 (double x) {

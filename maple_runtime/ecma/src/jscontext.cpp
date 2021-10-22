@@ -27,9 +27,9 @@
 #include "jsdate.h"
 #include "jsintl.h"
 
-__jsvalue __js_Global_ThisBinding;
-__jsvalue __js_ThisBinding;
-__jsvalue __js_OuterBinding;
+TValue __js_Global_ThisBinding;
+TValue __js_ThisBinding;
+TValue __js_OuterBinding;
 bool __is_global_strict = false;
 
 // Assume builtin-objects' names are reserved keywords.
@@ -328,24 +328,24 @@ __jsobject *__jsobj_get_or_create_builtin(__jsbuiltin_object_id id) {
   obj->shared.fun = __create_builtin_constructor(id, &arg_length);
   if (obj->shared.fun) {
     // init arguments' length
-    __jsvalue length_value = __number_value(arg_length);
+    TValue length_value = __number_value(arg_length);
     // 20.2.2.1 Function.length, { [[Writable]]: false, [[Enumerable]]: false, [[Configurable]]: true }
-    __jsobj_helper_init_value_property(obj, JSBUILTIN_STRING_LENGTH, &length_value, JSPROP_DESC_HAS_VUWUEC);
+    __jsobj_helper_init_value_property(obj, JSBUILTIN_STRING_LENGTH, length_value, JSPROP_DESC_HAS_VUWUEC);
   }
   if ((id == JSBUILTIN_MODULE && !__jsbuiltin_objects[JSBUILTIN_EXPORTS]) ||
       (id == JSBUILTIN_EXPORTS && !__jsbuiltin_objects[JSBUILTIN_MODULE])) {
     // set module.exports = exports
     bool ismodule = (id == JSBUILTIN_MODULE);
-    __jsvalue obj_value = __object_value(ismodule ? obj : __jsobj_get_or_create_builtin(JSBUILTIN_MODULE));
-    __jsvalue str_value = __string_value(__jsstr_get_builtin(JSBUILTIN_STRING_EXPORTS));
-    __jsvalue exports_value = __object_value(ismodule ? __jsobj_get_or_create_builtin(JSBUILTIN_EXPORTS) : obj);
-    __jsop_setprop(&obj_value, &str_value, &exports_value);
+    TValue obj_value = __object_value(ismodule ? obj : __jsobj_get_or_create_builtin(JSBUILTIN_MODULE));
+    TValue str_value = __string_value(__jsstr_get_builtin(JSBUILTIN_STRING_EXPORTS));
+    TValue exports_value = __object_value(ismodule ? __jsobj_get_or_create_builtin(JSBUILTIN_EXPORTS) : obj);
+    __jsop_setprop(obj_value, str_value, exports_value);
   }
   if (__jsbuiltin_object_map_string[id] != JSBUILTIN_STRING_EMPTY) {
     // add the builtin object as global this' prop
-    __jsvalue objV = __object_value(obj);
+    TValue objV = __object_value(obj);
     // __jsobj_helper_add_value_property(__jsval_to_object(&__js_Global_ThisBinding), __jsbuiltin_object_map_string[id], &objV, JSPROP_DESC_HAS_VUWUEUC);
-    __jsop_set_this_prop_by_name(&__js_Global_ThisBinding, __jsstr_get_builtin(__jsbuiltin_object_map_string[id]), &objV);
+    __jsop_set_this_prop_by_name(__js_Global_ThisBinding, __jsstr_get_builtin(__jsbuiltin_object_map_string[id]), objV);
   }
   return obj;
 }
@@ -354,9 +354,9 @@ __jsobject *__jsobj_get_or_create_builtin(__jsbuiltin_object_id id) {
 static bool __jsobj_check_builtin_circle(__jsobject *obj1, __jsobject *obj2) {
   __jsprop *prop = obj1->prop_list;
   while (prop) {
-    __jsvalue v = prop->desc.named_data_property.value;
-    if (__is_js_object(&v)) {
-      if (__jsval_to_object(&v) == obj2) {
+    TValue v = prop->desc.named_data_property.value;
+    if (__is_js_object(v)) {
+      if (__jsval_to_object(v) == obj2) {
         return true;
       }
     }
@@ -368,10 +368,10 @@ static bool __jsobj_check_builtin_circle(__jsobject *obj1, __jsobject *obj2) {
 static void __jsobj_delete_builtin_circle(__jsobject *obj1, __jsobject *obj2) {
   __jsprop *prop = obj1->prop_list;
   while (prop) {
-    __jsvalue v = prop->desc.named_data_property.value;
-    if (__is_js_object(&v) && __jsval_to_object(&v) == obj2) {
-      __jsvalue undefined = __undefined_value();
-      __set_value(&(prop->desc), &undefined);
+    TValue v = prop->desc.named_data_property.value;
+    if (__is_js_object(v) && __jsval_to_object(v) == obj2) {
+      TValue undefined = __undefined_value();
+      __set_value(&(prop->desc), undefined);
       GCDecRf(obj2);
       return;
     }

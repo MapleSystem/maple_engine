@@ -38,7 +38,7 @@ class JsEh {
     EHStage stage;
     EHThrownStage thrownStage;
     StackT<void *> gosubStack;
-    MValue thrownVal;
+    TValue thrownVal;
 
   public:
     DynMFunction *dynFunc;
@@ -64,11 +64,11 @@ class JsEh {
     thrownStage = s;
   }
 
-  inline MValue GetThrownval() {
+  inline TValue GetThrownval() {
     return thrownVal;
   }
 
-  inline void SetThrownval(MValue v) {
+  inline void SetThrownval(TValue v) {
     thrownVal = v;
   }
 

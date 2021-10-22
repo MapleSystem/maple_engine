@@ -57,10 +57,11 @@
 // find the aliged addr
 #define ALIGNMENTNEGOFFSET(off, align) \
   {                                    \
-    off = -off;                        \
-    if (off % align)                   \
+    if ((-off) % align) {              \
+      off = -off;                      \
       off += align - (off % align);    \
-    off = -off;                        \
+      off = -off;                      \
+    }                                  \
   }
 
 #define MAX_REGISTER_NUM 128

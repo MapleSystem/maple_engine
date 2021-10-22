@@ -24,6 +24,8 @@
 // otherwise use string to get/set property
 #define ARRAY_MAXINDEXNUM_INTERNAL 0x10000
 
+using namespace maple;
+
 enum __jsarr_iter_type {
   JSARR_EVERY = 0,
   JSARR_SOME,
@@ -35,89 +37,88 @@ enum __jsarr_iter_type {
 
 // Helper function for internal use.
 __jsobject *__js_new_arr_internal(uint32_t len);
-void __jsarr_internal_DefineOwnProperty(__jsobject *a, __jsvalue *p, __jsprop_desc desc, bool throw_p);
+void __jsarr_internal_DefineOwnProperty(__jsobject *a, TValue &p, __jsprop_desc desc, bool throw_p);
 void __jsarr_internal_DefineOwnPropertyByValue(__jsobject *a, uint32_t, __jsprop_desc desc, bool throw_p);
 
 void __jsarr_internal_DefineLengthProperty(__jsobject *a, __jsprop_desc desc, bool throw_p);
 
 void __jsarr_internal_DefineElemProperty(__jsobject *a, uint32_t index, __jsprop_desc desc, bool throw_p);
 // __jsarr_getIndex(p) returns MAX_ARRAY_INDEX if p is not an index
-uint32_t __jsarr_getIndex(__jsvalue *p);
-uint32_t __jsarr_getIndex(maple::TValue &p);
+uint32_t __jsarr_getIndex(TValue &p);
 
 void __jsarr_internal_MoveElem(__jsobject *arr, uint32_t to_idx, uint32_t from_idx);
 
-void __jsarr_internal_MoveElem(__jsobject *o, __jsvalue *arr, uint32_t to_idx, uint32_t from_idx);
+void __jsarr_internal_MoveElem(__jsobject *o, TValue *arr, uint32_t to_idx, uint32_t from_idx);
 
-void __set_generic_elem(__jsobject *arr, uint32_t index, __jsvalue *v);
-void __set_regular_elem(__jsvalue *arr, uint32_t index, __jsvalue *v);
+void __set_generic_elem(__jsobject *arr, uint32_t index, TValue &v);
+void __set_regular_elem(TValue *arr, uint32_t index, TValue &v);
 
-__jsstring *__jsarr_ElemToString(__jsvalue *elem);
+__jsstring *__jsarr_ElemToString(TValue &elem);
 
-__jsstring *__jsarr_JoinOnce(__jsvalue *elem, __jsstring *r, __jsstring *sep);
+__jsstring *__jsarr_JoinOnce(TValue &elem, __jsstring *r, __jsstring *sep);
 
 // idx is guaranteed outside to be less than length
 // equivalent to __jsobj_internal_Get, not __jsobj_internal_GetOwnProperty
-__jsvalue __jsarr_GetRegularElem(__jsobject *o, __jsvalue *arr, uint32_t idx);
+TValue __jsarr_GetRegularElem(__jsobject *o, TValue *arr, uint32_t idx);
 
-__jsvalue __jsarr_GetElem(__jsobject *o, uint32_t idx);
+TValue __jsarr_GetElem(__jsobject *o, uint32_t idx);
 
-__jsvalue *__jsarr_RegularRealloc(__jsvalue *arr, uint32_t old_len, uint32_t new_len);
+TValue *__jsarr_RegularRealloc(TValue *arr, uint32_t old_len, uint32_t new_len);
 
 // ecma 15.4.2.1
-__jsobject *__js_new_arr_elems(__jsvalue *items, uint32_t length);
-__jsobject *__js_new_arr_elems_direct(__jsvalue *items, uint32_t length);
+__jsobject *__js_new_arr_elems(TValue &items, uint32_t length);
+__jsobject *__js_new_arr_elems_direct(TValue *items, uint32_t length);
 // ecma 15.4.2.2
-__jsobject *__js_new_arr_length(__jsvalue *l);
+__jsobject *__js_new_arr_length(TValue l);
 // ecma 15.4.3.2
-__jsvalue __jsarr_isArray(__jsvalue *this_array, __jsvalue *arg);
+TValue __jsarr_isArray(TValue &this_array, TValue &arg);
 // ecma 15.4.4.2
-__jsvalue __jsarr_pt_toString(__jsvalue *this_array);
+TValue __jsarr_pt_toString(TValue &this_array);
 // ecma 15.4.4.3
-__jsvalue __jsarr_pt_toLocaleString(__jsvalue *this_array);
+TValue __jsarr_pt_toLocaleString(TValue &this_array);
 // ecma 15.4.4.4
-__jsvalue __jsarr_pt_concat(__jsvalue *this_array, __jsvalue *items, uint32_t size);
+TValue __jsarr_pt_concat(TValue &this_array, TValue *items, uint32_t size);
 // ecma 15.4.4.5
-__jsvalue __jsarr_pt_join(__jsvalue *this_array, __jsvalue *separator);
+TValue __jsarr_pt_join(TValue &this_array, TValue &separator);
 // ecma 15.4.4.6
-__jsvalue __jsarr_pt_pop(__jsvalue *this_array);
+TValue __jsarr_pt_pop(TValue &this_array);
 // ecma 15.4.4.7
-__jsvalue __jsarr_pt_push(__jsvalue *this_array, __jsvalue *items, uint32_t size);
+TValue __jsarr_pt_push(TValue &this_array, TValue *items, uint32_t size);
 // ecma 15.4.4.8
-__jsvalue __jsarr_pt_reverse(__jsvalue *this_array);
+TValue __jsarr_pt_reverse(TValue &this_array);
 // ecma 15.4.4.9
-__jsvalue __jsarr_pt_shift(__jsvalue *this_array);
+TValue __jsarr_pt_shift(TValue &this_array);
 // ecma 15.4.4.10
-__jsvalue __jsarr_pt_slice(__jsvalue *this_array, __jsvalue *start, __jsvalue *end);
+TValue __jsarr_pt_slice(TValue &this_array, TValue &start, TValue &end);
 // ecma 15.4.4.11
-__jsvalue __jsarr_pt_sort(__jsvalue *this_array, __jsvalue *comparefn);
+TValue __jsarr_pt_sort(TValue &this_array, TValue &comparefn);
 // ecma 15.4.4.12
-__jsvalue __jsarr_pt_splice(__jsvalue *this_array, __jsvalue *items, uint32_t size);
+TValue __jsarr_pt_splice(TValue &this_array, TValue *items, uint32_t size);
 // ecma 15.4.4.13
-__jsvalue __jsarr_pt_unshift(__jsvalue *this_array, __jsvalue *items, uint32_t size);
+TValue __jsarr_pt_unshift(TValue &this_array, TValue *items, uint32_t size);
 // ecma 15.4.4.14
-__jsvalue __jsarr_pt_indexOf(__jsvalue *this_array, __jsvalue *arg_list, uint32_t argNum);
+TValue __jsarr_pt_indexOf(TValue &this_array, TValue *arg_list, uint32_t argNum);
 // ecma 15.4.4.15
-__jsvalue __jsarr_pt_lastIndexOf(__jsvalue *this_array, __jsvalue *arg_list, uint32_t argNum);
+TValue __jsarr_pt_lastIndexOf(TValue &this_array, TValue *arg_list, uint32_t argNum);
 // ecma 15.4.4.16
-__jsvalue __jsarr_pt_every(__jsvalue *this_array, __jsvalue *arg_list, uint32_t argNum);
+TValue __jsarr_pt_every(TValue &this_array, TValue *arg_list, uint32_t argNum);
 // ecma 15.4.4.17
-__jsvalue __jsarr_pt_some(__jsvalue *this_array, __jsvalue *arg_list, uint32_t argNum);
+TValue __jsarr_pt_some(TValue &this_array, TValue *arg_list, uint32_t argNum);
 // ecma 15.4.4.18
-__jsvalue __jsarr_pt_forEach(__jsvalue *this_array, __jsvalue *arg_list, uint32_t argNum);
+TValue __jsarr_pt_forEach(TValue &this_array, TValue *arg_list, uint32_t argNum);
 // ecma 15.4.4.19
-__jsvalue __jsarr_pt_map(__jsvalue *this_array, __jsvalue *arg_list, uint32_t argNum);
+TValue __jsarr_pt_map(TValue &this_array, TValue *arg_list, uint32_t argNum);
 // ecma 15.4.4.20
-__jsvalue __jsarr_pt_filter(__jsvalue *this_array, __jsvalue *arg_list, uint32_t argNum);
+TValue __jsarr_pt_filter(TValue &this_array, TValue *arg_list, uint32_t argNum);
 // ecma 15.4.4.21
-__jsvalue __jsarr_pt_reduce(__jsvalue *this_array, __jsvalue *arg_list, uint32_t argNum);
+TValue __jsarr_pt_reduce(TValue &this_array, TValue *arg_list, uint32_t argNum);
 // ecma 15.4.4.22
-__jsvalue __jsarr_pt_reduceRight(__jsvalue *this_array, __jsvalue *arg_list, uint32_t argNum);
-__jsvalue __jsarr_internal_reduce(__jsvalue *this_array, __jsvalue *arg_list, uint32_t argNum, bool right_flag);
+TValue __jsarr_pt_reduceRight(TValue &this_array, TValue *arg_list, uint32_t argNum);
+TValue __jsarr_internal_reduce(TValue &this_array, TValue *arg_list, uint32_t argNum, bool right_flag);
 // ecma 23.1.2.3 Array.of(..items)
-__jsvalue __jsarr_pt_of(__jsvalue *arr, __jsvalue *items, uint32_t size);
+TValue __jsarr_pt_of(TValue &arr, TValue *items, uint32_t size);
 // ecma 23.1.2.1 Array.from(items[,mapfn[,thisArg]])
-__jsvalue __jsarr_pt_from(__jsvalue *arr, __jsvalue *args, uint32_t count);
+TValue __jsarr_pt_from(TValue &arr, TValue *args, uint32_t count);
 // ecma 22.1.3.8 Array.prototype.find (predicate[,thisArg])
-__jsvalue __jsarr_pt_find(__jsvalue *this_array, __jsvalue *arg_list, uint32_t argNum);
+TValue __jsarr_pt_find(TValue &this_array, TValue *arg_list, uint32_t argNum);
 #endif

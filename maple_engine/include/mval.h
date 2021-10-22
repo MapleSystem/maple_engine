@@ -55,22 +55,8 @@ inline bool IsMValueString(MValue mval) {
 inline bool IsMValueEnv(MValue mval) {
   return mval.ptyp == JSTYPE_ENV;
 }
-/*
-inline __jsvalue MValueToJsval(MValue mv) {
-  __jsvalue jv;
-  jv.x.asbits = mv.x.u64;
-  jv.ptyp = (__jstype)mv.ptyp;
-  return jv;
-}
 
-inline MValue JsvalToMValue(__jsvalue jv) {
-  MValue mv;
-  mv.x.u64 = jv.x.asbits;
-  mv.ptyp = jv.ptyp;
-  return mv;
-}
-*/
-inline MValue NullPointValue() {
+inline TValue NullPointValue() {
   return __null_value();
 }
 

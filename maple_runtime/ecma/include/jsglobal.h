@@ -16,55 +16,58 @@
 #ifndef JSGLOBAL_H
 #define JSGLOBAL_H
 #include "jsvalue.h"
+
+using namespace maple;
+
 // ecma 15.1.4.1 Object ( . . . ), See 15.2.1 and 15.2.2.
 // ecma 15.2.1
 // ecma 15.2.2
 __jsobject *__js_new_obj_obj_0();
-__jsobject *__js_new_obj_obj_1(__jsvalue *);
-__jsvalue __js_new_obj(__jsvalue *, __jsvalue *, uint32_t);
-__jsvalue __js_new_arr(__jsvalue *, __jsvalue *, uint32_t);
+__jsobject *__js_new_obj_obj_1(TValue &);
+TValue __js_new_obj(TValue &, TValue *, uint32_t);
+TValue __js_new_arr(TValue &, TValue *, uint32_t);
 // ecma 15.5.2
-__jsvalue __js_new_str_obj(__jsvalue *, __jsvalue *, uint32_t);
+TValue __js_new_str_obj(TValue &, TValue *, uint32_t);
 maple::TValue __js_new_str_obj(maple::TValue &);
 // 15.1.4.5 Boolean ( . . . ), See 15.6.1 and 15.6.2.
 // For 15.6.1 Use __js_ToBoolean instead.
 // ecma 15.6.2
-__jsvalue __js_new_boo_obj(__jsvalue *, __jsvalue *, uint32_t );
+TValue __js_new_boo_obj(TValue &, TValue *, uint32_t );
 maple::TValue __js_new_boo_obj(maple::TValue &);
 // 15.1.4.6 Number ( . . . ), See 15.7.1 and 15.7.2.
 // ecma 15.7.1  Use __js_ToNumer instead.
 // ecma 15.7.2.
-__jsvalue __js_new_num_obj(__jsvalue *, __jsvalue *, uint32_t);
+TValue __js_new_num_obj(TValue &, TValue *, uint32_t);
 maple::TValue __js_new_num_obj(maple::TValue &);
 // 15.3.4 Properties of the Function Prototype Object.
-__jsvalue __js_empty(__jsvalue *, __jsvalue *, uint32_t);
-__jsvalue __js_isnan(__jsvalue *, __jsvalue *, uint32_t);
-__jsvalue __js_new_reference_error_obj(__jsvalue *, __jsvalue *, uint32_t);
-__jsvalue __js_new_error_obj(__jsvalue *, __jsvalue *, uint32_t);
-__jsvalue __js_new_evalerror_obj(__jsvalue *, __jsvalue *, uint32_t);
-__jsvalue __js_new_rangeerror_obj(__jsvalue *, __jsvalue *, uint32_t);
-__jsvalue __js_new_syntaxerror_obj(__jsvalue *, __jsvalue *, uint32_t);
-__jsvalue __js_new_urierror_obj(__jsvalue *, __jsvalue *, uint32_t);
-__jsvalue __js_new_type_error_obj(__jsvalue *, __jsvalue *, uint32_t);
+TValue __js_empty(TValue &, TValue *, uint32_t);
+TValue __js_isnan(TValue &, TValue *, uint32_t);
+TValue __js_new_reference_error_obj(TValue &, TValue *, uint32_t);
+TValue __js_new_error_obj(TValue &, TValue *, uint32_t);
+TValue __js_new_evalerror_obj(TValue &, TValue *, uint32_t);
+TValue __js_new_rangeerror_obj(TValue &, TValue *, uint32_t);
+TValue __js_new_syntaxerror_obj(TValue &, TValue *, uint32_t);
+TValue __js_new_urierror_obj(TValue &, TValue *, uint32_t);
+TValue __js_new_type_error_obj(TValue &, TValue *, uint32_t);
 
-__jsvalue __js_parseint(__jsvalue *, __jsvalue *, uint32_t);
-__jsvalue __js_decodeuri(__jsvalue *, __jsvalue *, uint32_t);
-__jsvalue __js_decodeuricomponent(__jsvalue *, __jsvalue *, uint32_t);
-__jsvalue __js_parsefloat(__jsvalue *, __jsvalue *, uint32_t);
-__jsvalue __js_isfinite(__jsvalue *, __jsvalue *, uint32_t);
-__jsvalue __js_encodeuri(__jsvalue *, __jsvalue *, uint32_t);
-__jsvalue __js_encodeuricomponent(__jsvalue *, __jsvalue *, uint32_t);
-__jsvalue __js_eval();
-__jsvalue __js_escape(__jsvalue *, __jsvalue *);
+TValue __js_parseint(TValue &, TValue *, uint32_t);
+TValue __js_decodeuri(TValue &, TValue *, uint32_t);
+TValue __js_decodeuricomponent(TValue &, TValue *, uint32_t);
+TValue __js_parsefloat(TValue &, TValue *, uint32_t);
+TValue __js_isfinite(TValue &, TValue *, uint32_t);
+TValue __js_encodeuri(TValue &, TValue *, uint32_t);
+TValue __js_encodeuricomponent(TValue &, TValue *, uint32_t);
+TValue __js_eval();
+TValue __js_escape(TValue &, TValue *);
 
 // 15.7.1 The Number Constructor Called as a Function
-__jsvalue __js_new_numberconstructor(__jsvalue *, __jsvalue *, uint32_t);
+TValue __js_new_numberconstructor(TValue &, TValue *, uint32_t);
 // 15.6.1 The Boolean Constructor Called as a Function
-__jsvalue __js_new_booleanconstructor(__jsvalue *, __jsvalue *, uint32_t);
+TValue __js_new_booleanconstructor(TValue &, TValue *, uint32_t);
 // 15.5.1 The String Constructor Called as a Function
-__jsvalue __js_new_stringconstructor(__jsvalue *, __jsvalue *, uint32_t);
-__jsvalue __js_new_math_obj(__jsvalue *);
-__jsvalue __js_new_json_obj(__jsvalue *);
-__jsvalue __js_new_arraybufferconstructor(__jsvalue *, __jsvalue *, uint32_t);
-__jsvalue __js_new_dataviewconstructor(__jsvalue *, __jsvalue *, uint32_t);
+TValue __js_new_stringconstructor(TValue &, TValue *, uint32_t);
+TValue __js_new_math_obj(TValue &);
+TValue __js_new_json_obj(TValue &);
+TValue __js_new_arraybufferconstructor(TValue &, TValue *, uint32_t);
+TValue __js_new_dataviewconstructor(TValue &, TValue *, uint32_t);
 #endif

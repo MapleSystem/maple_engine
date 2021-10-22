@@ -24,7 +24,7 @@
 #include "jsdate.h"
 
 
-static __jsvalue __jsop_add_double(double dx, double dy) {
+static TValue __jsop_add_double(double dx, double dy) {
     if ((dx >= NumberMaxValue && dy > 0) || (dx > 0 && dy >= NumberMaxValue)) {
       return __number_infinity();
     }
@@ -37,9 +37,22 @@ static __jsvalue __jsop_add_double(double dx, double dy) {
     }
     return __double_value(dx + dy);
 }
+
+static TValue __jsop_add_string_NaN(TValue &x, TValue &y) {
+  __jsstring* nanStr =  __jsstr_get_builtin(JSBUILTIN_STRING_NAN);
+  if (__is_string(y)) {
+    __jsstring *lstr = __js_ToString(y);
+    return  __string_value(__jsstr_concat_2(nanStr, lstr));
+  } else if (__is_string(x)) {
+    __jsstring *lstr = __js_ToString(x);
+    return  __string_value(__jsstr_concat_2(lstr, nanStr));
+  } else {
+    assert(false && "shouldn't be here");
+  }
+}
 // ecma 11.6 Additive Operators
 // ecma 11.6.1 The Addition operator ( + )
-__jsvalue __jsop_add(__jsvalue *x, __jsvalue *y) {
+TValue __jsop_add(TValue &x, TValue &y) {
   if (__is_number(x) && __is_number(y)) {
     return __number_value(__jsval_to_number(x) + __jsval_to_number(y));
   } else if (__is_number(x) && __is_double(y)) {
@@ -50,41 +63,45 @@ __jsvalue __jsop_add(__jsvalue *x, __jsvalue *y) {
     return __jsop_add_double(__jsval_to_double(x), (double)__jsval_to_number(y));
   }
 
+  if ((__is_nan(x) && __is_string(y)) ||
+      (__is_nan(y) && __is_string(x))) {
+    return __jsop_add_string_NaN(x, y);
+  }
   if(__is_nan(x) || __is_nan(y))
       return __nan_value();
   if (__is_infinity(x) && __is_infinity(y)) {
-      if(x->x.i32 != y->x.i32)
+      if(x.x.i32 != y.x.i32)
           return __nan_value();
-      return *x;
+      return x;
   }
   if (__is_infinity(x)) {
-    __jsvalue yPrim = __js_ToPrimitive(y, JSTYPE_UNDEFINED /* ??? */);
+    TValue yPrim = __js_ToPrimitive(y, JSTYPE_UNDEFINED /* ??? */);
     bool isInfinity = __is_infinity(x);
-    if (__is_string(&yPrim)) {
+    if (__is_string(yPrim)) {
       __jsstring *lstr = __jsstr_get_builtin(isInfinity ?
                                     (__is_neg_infinity(x) ? JSBUILTIN_STRING_NEG_INFINITY_UL : JSBUILTIN_STRING_INFINITY_UL) :
                                     JSBUILTIN_STRING_NAN);
-      __jsstring *rstr = __js_ToString(&yPrim);
-      __jsvalue ret = __string_value(__jsstr_concat_2(lstr, rstr));
+      __jsstring *rstr = __js_ToString(yPrim);
+      TValue ret = __string_value(__jsstr_concat_2(lstr, rstr));
       memory_manager->RecallString(rstr);
       return ret;
     } else {
-      return *x;
+      return x;
     }
   }
   if (__is_infinity(y)) {
-    __jsvalue xPrim = __js_ToPrimitive(x, JSTYPE_UNDEFINED /* ??? */);
+    TValue xPrim = __js_ToPrimitive(x, JSTYPE_UNDEFINED /* ??? */);
     bool isInfinity = __is_infinity(y);
-    if (__is_string(&xPrim)) {
-      __jsstring *lstr = __js_ToString(&xPrim);
+    if (__is_string(xPrim)) {
+      __jsstring *lstr = __js_ToString(xPrim);
       __jsstring *rstr = __jsstr_get_builtin(isInfinity ?
                                     (__is_neg_infinity(y) ? JSBUILTIN_STRING_NEG_INFINITY_UL : JSBUILTIN_STRING_INFINITY_UL) :
                                     JSBUILTIN_STRING_NAN);
-      __jsvalue ret = __string_value(__jsstr_concat_2(lstr, rstr));
+      TValue ret = __string_value(__jsstr_concat_2(lstr, rstr));
       memory_manager->RecallString(lstr);
       return ret;
     } else {
-      return *y;
+      return y;
     }
   }
   if (((__is_null(x) || __is_number(x)) && __is_undefined(y)) ||
@@ -93,10 +110,10 @@ __jsvalue __jsop_add(__jsvalue *x, __jsvalue *y) {
     return __nan_value();
   }
 
-  __jsvalue lprim;
-  __jsvalue rprim;
+  TValue lprim;
+  TValue rprim;
   if (__is_primitive(x)) {
-    lprim = *x;
+    lprim = x;
   } else {
     __jsobject *objX = __jsval_to_object(x);
     lprim = (objX->object_class == __jsobj_class::JSDATE) ?
@@ -104,19 +121,19 @@ __jsvalue __jsop_add(__jsvalue *x, __jsvalue *y) {
                __object_internal_DefaultValue(objX, JSTYPE_UNDEFINED);
   }
   if (__is_primitive(y)) {
-    rprim = *y;
+    rprim = y;
   } else {
     __jsobject *objY = __jsval_to_object(y);
     rprim = (objY->object_class == __jsobj_class::JSDATE) ?
                __jsdate_ToString_Obj(objY):
                __object_internal_DefaultValue(objY, JSTYPE_UNDEFINED);
   }
-  if (__is_string(&lprim) || __is_string(&rprim)) {
-    bool isLstr = __is_string(&lprim);
-    bool isRstr = __is_string(&rprim);
-    __jsstring *lstr = __js_ToString(&lprim);
-    __jsstring *rstr = __js_ToString(&rprim);
-    __jsvalue ret = __string_value(__jsstr_concat_2(lstr, rstr));
+  if (__is_string(lprim) || __is_string(rprim)) {
+    bool isLstr = __is_string(lprim);
+    bool isRstr = __is_string(rprim);
+    __jsstring *lstr = __js_ToString(lprim);
+    __jsstring *rstr = __js_ToString(rprim);
+    TValue ret = __string_value(__jsstr_concat_2(lstr, rstr));
     if (!isLstr)
       memory_manager->RecallString(lstr);
     if (!isRstr)
@@ -132,12 +149,12 @@ __jsvalue __jsop_add(__jsvalue *x, __jsvalue *y) {
       return __nan_value();
     }
     // ??? Overflow
-    return __number_value(__js_ToNumber(&lprim) + __js_ToNumber(&rprim));
+    return __number_value(__js_ToNumber(lprim) + __js_ToNumber(rprim));
   }
 }
 
-__jsvalue __jsop_object_div(__jsvalue *x, __jsvalue *y) {
-  switch (x->ptyp) {
+TValue __jsop_object_div(TValue &x, TValue &y) {
+  switch (GET_TYPE(x)) {
     case JSTYPE_BOOLEAN: {
       if (__is_js_object(y)) {
         __jsobject *yobj = __jsval_to_object(y);
@@ -146,14 +163,14 @@ __jsvalue __jsop_object_div(__jsvalue *x, __jsvalue *y) {
           if (yval == 0) {
             return  __number_infinity();
           }
-          int32_t res = x->x.boo / yval;
+          int32_t res = x.x.u8 / yval;
           return __number_value(res);
         } else if (yobj->object_class == JSBOOLEAN) {
           int32_t yval = yobj->shared.prim_bool;
           if (yval == 0) {
             return __number_infinity();
           }
-          int32_t res = x->x.boo / yval;
+          int32_t res = x.x.u8 / yval;
           return __number_value(res);
         } else if (yobj->object_class == JSSTRING) {
           bool ok2Convert = true;
@@ -164,19 +181,19 @@ __jsvalue __jsop_object_div(__jsvalue *x, __jsvalue *y) {
             if (yval == 0) {
               return __number_infinity();
             }
-            int32_t res = x->x.boo / yval;
+            int32_t res = x.x.u8 / yval;
             return __number_value(res);
           }
         } else if (yobj->object_class == JSOBJECT) {
-          __jsvalue yjsval = __object_internal_DefaultValue(yobj, JSTYPE_NUMBER);
-          if (__is_undefined(&yjsval) || __is_string(&yjsval)) {
+          TValue yjsval = __object_internal_DefaultValue(yobj, JSTYPE_NUMBER);
+          if (__is_undefined(yjsval) || __is_string(yjsval)) {
             return __nan_value();
           } else {
             int32_t yval = yjsval.x.i32;
             if (yval == 0) {
               return  __number_infinity();
             }
-            int32_t res = x->x.i32 / yval;
+            int32_t res = x.x.i32 / yval;
             return __number_value(res);
           }
         } else if (yobj->object_class == JSFUNCTION) {
@@ -189,7 +206,7 @@ __jsvalue __jsop_object_div(__jsvalue *x, __jsvalue *y) {
       }
     }
     case JSTYPE_NUMBER: {
-      int32_t xval = x->x.i32;
+      int32_t xval = x.x.i32;
       if (__is_js_object(y)) {
         __jsobject *yobj = __jsval_to_object(y);
         if (yobj->object_class == JSNUMBER) {
@@ -219,8 +236,8 @@ __jsvalue __jsop_object_div(__jsvalue *x, __jsvalue *y) {
             return __number_value(res);
           }
         } else if (yobj->object_class == JSOBJECT) {
-          __jsvalue yjsval = __object_internal_DefaultValue(yobj, JSTYPE_NUMBER);
-          if (__is_undefined(&yjsval) || __is_string(&yjsval)) {
+          TValue yjsval = __object_internal_DefaultValue(yobj, JSTYPE_NUMBER);
+          if (__is_undefined(yjsval) || __is_string(yjsval)) {
             return __nan_value();
           } else {
             int32_t yval = yjsval.x.i32;
@@ -253,8 +270,8 @@ __jsvalue __jsop_object_div(__jsvalue *x, __jsvalue *y) {
           return __nan_value();
         }
       } else if (xobj->object_class == JSOBJECT) {
-        __jsvalue xjsval = __object_internal_DefaultValue(xobj, JSTYPE_NUMBER);
-        if (__is_undefined(&xjsval) || __is_string(&xjsval)) {
+        TValue xjsval = __object_internal_DefaultValue(xobj, JSTYPE_NUMBER);
+        if (__is_undefined(xjsval) || __is_string(xjsval)) {
           return __nan_value();
         } else {
           xval = xjsval.x.i32;
@@ -293,8 +310,8 @@ __jsvalue __jsop_object_div(__jsvalue *x, __jsvalue *y) {
             return __number_value(res);
           }
         } else if (yobj->object_class == JSOBJECT) {
-          __jsvalue yjsval = __object_internal_DefaultValue(yobj, JSTYPE_NUMBER);
-          if (__is_undefined(&yjsval) || __is_string(&yjsval)) {
+          TValue yjsval = __object_internal_DefaultValue(yobj, JSTYPE_NUMBER);
+          if (__is_undefined(yjsval) || __is_string(yjsval)) {
             return __nan_value();
           } else {
             int32_t yval = yjsval.x.i32;
@@ -310,10 +327,10 @@ __jsvalue __jsop_object_div(__jsvalue *x, __jsvalue *y) {
           assert(false && "nyi");
         }
       } else if (__is_number(y) || __is_boolean(y)) {
-        if (y->x.i32 == 0) {
+        if (y.x.i32 == 0) {
           return xval >= 0 ? __number_infinity() : __number_neg_infinity();
         } else {
-          return __number_value(xval / y->x.i32);
+          return __number_value(xval / y.x.i32);
         }
       } else if (__is_null(y)) {
         return xval >= 0 ? __number_infinity() : __number_neg_infinity();
@@ -331,8 +348,8 @@ __jsvalue __jsop_object_div(__jsvalue *x, __jsvalue *y) {
   }
 }
 
-__jsvalue __jsop_object_rem(__jsvalue *x, __jsvalue *y) {
-  switch (x->ptyp) {
+TValue __jsop_object_rem(TValue &x, TValue &y) {
+  switch (GET_TYPE(x)) {
     case JSTYPE_STRING: {
       bool isNum;
       int32_t xval = __js_str2num2(__jsval_to_string(x), isNum, true);
@@ -359,8 +376,8 @@ __jsvalue __jsop_object_rem(__jsvalue *x, __jsvalue *y) {
             return __number_value(res);
           }
         } else if (yobj->object_class == JSOBJECT) {
-          __jsvalue yjsval = __object_internal_DefaultValue(yobj, JSTYPE_NUMBER);
-          if (__is_undefined(&yjsval) || __is_string(&yjsval)) {
+          TValue yjsval = __object_internal_DefaultValue(yobj, JSTYPE_NUMBER);
+          if (__is_undefined(yjsval) || __is_string(yjsval)) {
             return __nan_value();
           } else {
             int32_t yval = yjsval.x.i32;
@@ -381,11 +398,11 @@ __jsvalue __jsop_object_rem(__jsvalue *x, __jsvalue *y) {
         __jsobject *yobj = __jsval_to_object(y);
         if (yobj->object_class == JSNUMBER) {
           int32_t yval = __js_ToNumber(y);
-          int32_t res = x->x.boo % yval;
+          int32_t res = x.x.u8 % yval;
           return __number_value(res);
         } else if (yobj->object_class == JSBOOLEAN) {
           int32_t yval = yobj->shared.prim_bool;
-          int32_t res = x->x.boo % yval;
+          int32_t res = x.x.u8 % yval;
           return __number_value(res);
         } else if (yobj->object_class == JSSTRING) {
           bool ok2Convert = true;
@@ -393,16 +410,16 @@ __jsvalue __jsop_object_rem(__jsvalue *x, __jsvalue *y) {
           if (!ok2Convert) {
             return __nan_value();
           } else {
-            int32_t res = x->x.boo % yval;
+            int32_t res = x.x.u8 % yval;
             return __number_value(res);
           }
         } else if (yobj->object_class == JSOBJECT) {
-          __jsvalue yjsval = __object_internal_DefaultValue(yobj, JSTYPE_NUMBER);
-          if (__is_undefined(&yjsval) || __is_string(&yjsval)) {
+          TValue yjsval = __object_internal_DefaultValue(yobj, JSTYPE_NUMBER);
+          if (__is_undefined(yjsval) || __is_string(yjsval)) {
             return __nan_value();
           } else {
             int32_t yval = yjsval.x.i32;
-            int32_t res = x->x.i32 % yval;
+            int32_t res = x.x.i32 % yval;
             return __number_value(res);
           }
         } else if (yobj->object_class == JSFUNCTION) {
@@ -419,11 +436,11 @@ __jsvalue __jsop_object_rem(__jsvalue *x, __jsvalue *y) {
         __jsobject *yobj = __jsval_to_object(y);
         if (yobj->object_class == JSNUMBER) {
           int32_t yval = __js_ToNumber(y);
-          int32_t res = x->x.boo % yval;
+          int32_t res = x.x.u8 % yval;
           return __number_value(res);
         } else if (yobj->object_class == JSBOOLEAN) {
           int32_t yval = yobj->shared.prim_bool;
-          int32_t res = x->x.boo % yval;
+          int32_t res = x.x.u8 % yval;
           return __number_value(res);
         } else if (yobj->object_class == JSSTRING) {
           bool ok2Convert = true;
@@ -431,16 +448,16 @@ __jsvalue __jsop_object_rem(__jsvalue *x, __jsvalue *y) {
           if (!ok2Convert) {
             return __nan_value();
           } else {
-            int32_t res = x->x.boo % yval;
+            int32_t res = x.x.u8 % yval;
             return __number_value(res);
           }
         } else if (yobj->object_class == JSOBJECT) {
-          __jsvalue yjsval = __object_internal_DefaultValue(yobj, JSTYPE_NUMBER);
-          if (__is_undefined(&yjsval) || __is_string(&yjsval)) {
+          TValue yjsval = __object_internal_DefaultValue(yobj, JSTYPE_NUMBER);
+          if (__is_undefined(yjsval) || __is_string(yjsval)) {
             return __nan_value();
           } else {
             int32_t yval = yjsval.x.i32;
-            int32_t res = x->x.i32 % yval;
+            int32_t res = x.x.i32 % yval;
             return __number_value(res);
           }
         } else if (yobj->object_class == JSFUNCTION) {
@@ -466,8 +483,8 @@ __jsvalue __jsop_object_rem(__jsvalue *x, __jsvalue *y) {
           return __nan_value();
         }
       } else if (xobj->object_class == JSOBJECT) {
-        __jsvalue xjsval = __object_internal_DefaultValue(xobj, JSTYPE_NUMBER);
-        if (__is_undefined(&xjsval) || __is_string(&xjsval)) {
+        TValue xjsval = __object_internal_DefaultValue(xobj, JSTYPE_NUMBER);
+        if (__is_undefined(xjsval) || __is_string(xjsval)) {
           return __nan_value();
         } else {
           xval = xjsval.x.i32;
@@ -497,12 +514,12 @@ __jsvalue __jsop_object_rem(__jsvalue *x, __jsvalue *y) {
             return __number_value(res);
           }
         } else if (yobj->object_class == JSOBJECT) {
-          __jsvalue yjsval = __object_internal_DefaultValue(yobj, JSTYPE_NUMBER);
-          if (__is_undefined(&yjsval) || __is_string(&yjsval)) {
+          TValue yjsval = __object_internal_DefaultValue(yobj, JSTYPE_NUMBER);
+          if (__is_undefined(yjsval) || __is_string(yjsval)) {
             return __nan_value();
           } else {
             int32_t yval = yjsval.x.i32;
-            int32_t res = x->x.boo % yval;
+            int32_t res = x.x.u8 % yval;
             return __number_value(res);
           }
         } else if (yobj->object_class == JSFUNCTION) {
@@ -511,10 +528,10 @@ __jsvalue __jsop_object_rem(__jsvalue *x, __jsvalue *y) {
           assert(false && "nyi");
         }
       } else if (__is_number(y) || __is_boolean(y)) {
-        if (y->x.i32 == 0) {
+        if (y.x.i32 == 0) {
           return xval >= 0 ? __number_infinity() : __number_neg_infinity();
         } else {
-          return __number_value(xval % y->x.i32);
+          return __number_value(xval % y.x.i32);
         }
       } else if (__is_null(y)) {
         return xval >= 0 ? __number_infinity() : __number_neg_infinity();
@@ -532,20 +549,20 @@ __jsvalue __jsop_object_rem(__jsvalue *x, __jsvalue *y) {
   }
 }
 
-__jsvalue __jsop_object_sub(__jsvalue *x, __jsvalue *y) {
-  switch (x->ptyp) {
+TValue __jsop_object_sub(TValue &x, TValue &y) {
+  switch (GET_TYPE(x)) {
     case JSTYPE_NUMBER:
     case JSTYPE_BOOLEAN: {
       if (__is_js_object(y)) {
         bool isConvertible = false;
-        __jsvalue yval = __js_ToNumberSlow2(y, isConvertible);
+        TValue yval = __js_ToNumberSlow2(y, isConvertible);
         if (!isConvertible)
           return __nan_value();
-        if (__is_double(&yval)) {
+        if (__is_double(yval)) {
           double opy = (yval.x.f64);
-          return __double_value((double)x->x.i32 - opy);
+          return __double_value((double)x.x.i32 - opy);
         } else {
-          return __number_value(x->x.i32 - yval.x.i32);
+          return __number_value(x.x.i32 - yval.x.i32);
         }
       } else {
         assert(false && "nyi");
@@ -553,30 +570,30 @@ __jsvalue __jsop_object_sub(__jsvalue *x, __jsvalue *y) {
     }
     case JSTYPE_OBJECT: {
       bool isXConvertible = false;
-      __jsvalue xval = __js_ToNumberSlow2(x, isXConvertible);
+      TValue xval = __js_ToNumberSlow2(x, isXConvertible);
       if (!isXConvertible)
         return __nan_value();
       if (__is_js_object(y)) {
         bool isYConvertible = false;
-        __jsvalue yval = __js_ToNumberSlow2(y, isYConvertible);
+        TValue yval = __js_ToNumberSlow2(y, isYConvertible);
         if (!isYConvertible)
           return __nan_value();
-        if (__is_double(&xval) && __is_double(&yval)) {
+        if (__is_double(xval) && __is_double(yval)) {
           double opx = (xval.x.f64);
           double opy = yval.x.f64;
           return __double_value(opx - opy);
-        } else if (__is_double(&xval)) {
+        } else if (__is_double(xval)) {
           double opx = (xval.x.f64);
           return __double_value(opx - yval.x.i32);
-        } else if (__is_double(&yval)) {
+        } else if (__is_double(yval)) {
           double opy = (yval.x.f64);
           return __double_value(xval.x.i32 - opy);
         } else {
           return __number_value(xval.x.i32 - yval.x.i32);
         }
       } else if (__is_number(y) || __is_boolean(y)) {
-        return __is_double(&xval) ? __double_value((xval.x.f64) - y->x.i32) :
-                 __number_value(xval.x.i32 - y->x.i32);
+        return __is_double(xval) ? __double_value((xval.x.f64) - y.x.i32) :
+                 __number_value(xval.x.i32 - y.x.i32);
       } else if (__is_undefined(y)) {
         return __nan_value();
       } else if (__is_null(y)) {
@@ -588,10 +605,10 @@ __jsvalue __jsop_object_sub(__jsvalue *x, __jsvalue *y) {
     case JSTYPE_NULL: {
       if (__is_js_object(y)) {
         bool isConvertible = false;
-        __jsvalue yval = __js_ToNumberSlow2(y, isConvertible);
+        TValue yval = __js_ToNumberSlow2(y, isConvertible);
         if (!isConvertible)
           return __nan_value();
-        if (__is_double(&yval)) {
+        if (__is_double(yval)) {
           double opy = (yval.x.f64);
           return __double_value(-opy);
         } else {
@@ -606,33 +623,33 @@ __jsvalue __jsop_object_sub(__jsvalue *x, __jsvalue *y) {
   }
 }
 
-__jsvalue __jsop_object_mul(__jsvalue *x, __jsvalue *y) {
+TValue __jsop_object_mul(TValue &x, TValue &y) {
   if (__is_null(x) || __is_null(y)) {
     return __number_value(0);
   }
-  switch (x->ptyp) {
+  switch (GET_TYPE(x)) {
     case JSTYPE_BOOLEAN: {
       if (__is_js_object(y)) {
         __jsobject *yobj = __jsval_to_object(y);
         if (yobj->object_class == JSNUMBER) {
           int32_t yval = __js_ToNumber(y);
-          int32_t res = x->x.boo * yval;
+          int32_t res = x.x.u8 * yval;
           return __number_value(res);
         } else if (yobj->object_class == JSBOOLEAN) {
           int32_t yval = yobj->shared.prim_bool;
-          int32_t res = x->x.boo * yval;
+          int32_t res = x.x.u8 * yval;
           return __number_value(res);
         } else if (yobj->object_class == JSSTRING) {
           int32_t yval = __js_str2num(yobj->shared.prim_string);
-          int32_t res = x->x.boo * yval;
+          int32_t res = x.x.u8 * yval;
           return __number_value(res);
         } else if (yobj->object_class == JSOBJECT) {
-          __jsvalue yjsval = __object_internal_DefaultValue(yobj, JSTYPE_NUMBER);
-          if (__is_undefined(&yjsval) || __is_string(&yjsval)) {
+          TValue yjsval = __object_internal_DefaultValue(yobj, JSTYPE_NUMBER);
+          if (__is_undefined(yjsval) || __is_string(yjsval)) {
             return __nan_value();
           } else {
             int32_t yval = yjsval.x.i32;
-            int32_t res = x->x.i32 * yval;
+            int32_t res = x.x.i32 * yval;
             return __number_value(res);
           }
         } else if (yobj->object_class == JSFUNCTION) {
@@ -649,23 +666,23 @@ __jsvalue __jsop_object_mul(__jsvalue *x, __jsvalue *y) {
         __jsobject *yobj = __jsval_to_object(y);
         if (yobj->object_class == JSNUMBER) {
           int32_t yval = __js_ToNumber(y);
-          int32_t res = x->x.boo * yval;
+          int32_t res = x.x.u8 * yval;
           return __number_value(res);
         } else if (yobj->object_class == JSBOOLEAN) {
           int32_t yval = yobj->shared.prim_bool;
-          int32_t res = x->x.boo * yval;
+          int32_t res = x.x.u8 * yval;
           return __number_value(res);
         } else if (yobj->object_class == JSSTRING) {
           int32_t yval = __js_str2num(yobj->shared.prim_string);
-          int32_t res = x->x.boo * yval;
+          int32_t res = x.x.u8 * yval;
           return __number_value(res);
         } else if (yobj->object_class == JSOBJECT) {
-          __jsvalue yjsval = __object_internal_DefaultValue(yobj, JSTYPE_NUMBER);
-          if (__is_undefined(&yjsval) || __is_string(&yjsval)) {
+          TValue yjsval = __object_internal_DefaultValue(yobj, JSTYPE_NUMBER);
+          if (__is_undefined(yjsval) || __is_string(yjsval)) {
             return __nan_value();
           } else {
             int32_t yval = yjsval.x.i32;
-            int32_t res = x->x.i32 * yval;
+            int32_t res = x.x.i32 * yval;
             return __number_value(res);
           }
         } else if (yobj->object_class == JSFUNCTION) {
@@ -687,8 +704,8 @@ __jsvalue __jsop_object_mul(__jsvalue *x, __jsvalue *y) {
       } else if (xobj->object_class == JSSTRING) {
         xval = __js_str2num(xobj->shared.prim_string);
       } else if (xobj->object_class == JSOBJECT) {
-        __jsvalue xjsval = __object_internal_DefaultValue(xobj, JSTYPE_NUMBER);
-        if (__is_undefined(&xjsval) || __is_string(&xjsval)) {
+        TValue xjsval = __object_internal_DefaultValue(xobj, JSTYPE_NUMBER);
+        if (__is_undefined(xjsval) || __is_string(xjsval)) {
           return __nan_value();
         } else {
           xval = xjsval.x.i32;
@@ -713,8 +730,8 @@ __jsvalue __jsop_object_mul(__jsvalue *x, __jsvalue *y) {
           int32_t res = xval * yval;
           return __number_value(res);
         } else if (yobj->object_class == JSOBJECT) {
-          __jsvalue yjsval = __object_internal_DefaultValue(yobj, JSTYPE_NUMBER);
-          if (__is_undefined(&yjsval) || __is_string(&yjsval)) {
+          TValue yjsval = __object_internal_DefaultValue(yobj, JSTYPE_NUMBER);
+          if (__is_undefined(yjsval) || __is_string(yjsval)) {
             return __nan_value();
           } else {
             int32_t yval = yjsval.x.i32;
@@ -727,7 +744,7 @@ __jsvalue __jsop_object_mul(__jsvalue *x, __jsvalue *y) {
           assert(false && "nyi");
         }
       } else if (__is_number(y) || __is_boolean(y)) {
-        return __number_value(y->x.i32 * xval);
+        return __number_value(y.x.i32 * xval);
       } else {
         assert(false && "nyi");
       }
@@ -738,7 +755,7 @@ __jsvalue __jsop_object_mul(__jsvalue *x, __jsvalue *y) {
 }
 
 // ecma 11.8.5
-bool __js_AbstractRelationalComparison(__jsvalue *x, __jsvalue *y, bool &isAlwaysFalse, bool leftFirst) {
+bool __js_AbstractRelationalComparison(TValue &x, TValue &y, bool &isAlwaysFalse, bool leftFirst) {
   if (__is_number(x) && __is_number(y)) {
     return __jsval_to_number(x) < __jsval_to_number(y);
   }
@@ -768,8 +785,8 @@ bool __js_AbstractRelationalComparison(__jsvalue *x, __jsvalue *y, bool &isAlway
   }
 
   // ecma 11.8.5 step 1.
-  __jsvalue px;
-  __jsvalue py;
+  TValue px;
+  TValue py;
   if (leftFirst) {
     px = __js_ToPrimitive(x, JSTYPE_NUMBER);
     py = __js_ToPrimitive(y, JSTYPE_NUMBER);
@@ -778,28 +795,28 @@ bool __js_AbstractRelationalComparison(__jsvalue *x, __jsvalue *y, bool &isAlway
     px = __js_ToPrimitive(x, JSTYPE_NUMBER);
   }
   // ecma 11.8.5 step 3.
-  if (!(__is_string(&px) && __is_string(&py))) {
+  if (!(__is_string(px) && __is_string(py))) {
     bool okToCvt1 = false;
     bool okToCvt2 = false;
-    __jsvalue jsv1 = __js_ToNumber2(&px, okToCvt1);
-    __jsvalue jsv2 = __js_ToNumber2(&py, okToCvt2);
+    TValue jsv1 = __js_ToNumber2(px, okToCvt1);
+    TValue jsv2 = __js_ToNumber2(py, okToCvt2);
     if (!okToCvt1 || !okToCvt2) {
       isAlwaysFalse = true;
       return false;
     }
-    double v1 = __is_double(&jsv1) ? __jsval_to_double(&jsv1) : __jsval_to_number(&jsv1);
-    double v2 = __is_double(&jsv2) ? __jsval_to_double(&jsv2) : __jsval_to_number(&jsv2);
+    double v1 = __is_double(jsv1) ? __jsval_to_double(jsv1) : __jsval_to_number(jsv1);
+    double v2 = __is_double(jsv2) ? __jsval_to_double(jsv2) : __jsval_to_number(jsv2);
     return v1 < v2;
   } else { /* ecma 11.8.5 step 4. */
-    __jsstring *str1 = __jsval_to_string(&px);
-    __jsstring *str2 = __jsval_to_string(&py);
+    __jsstring *str1 = __jsval_to_string(px);
+    __jsstring *str2 = __jsval_to_string(py);
     int32_t value = __jsstr_compare(str1, str2);
     return value < 0;
   }
 }
 
 // ecma 11.8.6
-bool __jsop_instanceof(__jsvalue *x, __jsvalue *y) {
+bool __jsop_instanceof(TValue &x, TValue &y) {
   if (!__js_Impl_HasInstance(y)) {
     MAPLE_JS_TYPEERROR_EXCEPTION();
   }
@@ -818,7 +835,7 @@ bool __jsop_instanceof(__jsvalue *x, __jsvalue *y) {
 }
 
 // ecma 11.8.7
-bool __jsop_in(__jsvalue *x, __jsvalue *y) {
+bool __jsop_in(TValue &x, TValue &y) {
   if (__jsval_typeof(y) != JSTYPE_OBJECT) {
     MAPLE_JS_TYPEERROR_EXCEPTION();
   }
@@ -831,10 +848,10 @@ bool __jsop_in(__jsvalue *x, __jsvalue *y) {
   return res;
 }
 
-bool __js_StrictEquality(__jsvalue *x, __jsvalue *y);
+bool __js_StrictEquality(TValue &x, TValue &y);
 
 // ecma 11.9.3
-bool __js_AbstractEquality(__jsvalue *x, __jsvalue *y, bool &isAlwaysFalse) {
+bool __js_AbstractEquality(TValue &x, TValue &y, bool &isAlwaysFalse) {
   // handle special value first
   if (__is_infinity(x) || __is_infinity(y)) {
     if (__is_neg_infinity(x) && __is_neg_infinity(y))
@@ -842,10 +859,10 @@ bool __js_AbstractEquality(__jsvalue *x, __jsvalue *y, bool &isAlwaysFalse) {
     if (__is_infinity(x) && __is_infinity(y))
       return true;
     if (__is_infinity(x) && __is_js_object(y)) {
-      __jsvalue prim_value = __js_ToPrimitive2(y);
-      GCCheckAndIncRf(prim_value.x.asbits, IsNeedRc(prim_value.ptyp));
-      bool res = __js_AbstractEquality(x, &prim_value, isAlwaysFalse);
-      GCCheckAndDecRf(prim_value.x.asbits, IsNeedRc(prim_value.ptyp));
+      TValue prim_value = __js_ToPrimitive2(y);
+      GCCheckAndIncRf(GET_PAYLOAD(prim_value), IS_NEEDRC(prim_value.x.u64));
+      bool res = __js_AbstractEquality(x, prim_value, isAlwaysFalse);
+      GCCheckAndDecRf(GET_PAYLOAD(prim_value), IS_NEEDRC(prim_value.x.u64));
       return res;
     }
     if (__is_infinity(y) && __is_js_object(x)) {
@@ -867,39 +884,39 @@ bool __js_AbstractEquality(__jsvalue *x, __jsvalue *y, bool &isAlwaysFalse) {
   // ecma 11.9.3 step 4.
   if ((__is_number(x) || __is_double(x)) && __is_string(y)) {
     bool isConvertable = false;
-    __jsvalue num_y = __js_ToNumber2(y, isConvertable);
-    return __js_AbstractEquality(x, &num_y, isAlwaysFalse);
+    TValue num_y = __js_ToNumber2(y, isConvertable);
+    return __js_AbstractEquality(x, num_y, isAlwaysFalse);
   }
   // ecma 11.9.3 step 5.
   if (__is_string(x) && (__is_number(y) || __is_double(y))) {
     bool isConvertable = false;
-    __jsvalue num_x = __js_ToNumber2(x, isConvertable);
-    return __js_AbstractEquality(&num_x, y, isAlwaysFalse);
+    TValue num_x = __js_ToNumber2(x, isConvertable);
+    return __js_AbstractEquality(num_x, y, isAlwaysFalse);
   }
   // ecma 11.9.3 step 6.
   if (__is_boolean(x)) {
-    __jsvalue num_x = __number_value(__js_ToNumber(x));
-    return __js_AbstractEquality(&num_x, y, isAlwaysFalse);
+    TValue num_x = __number_value(__js_ToNumber(x));
+    return __js_AbstractEquality(num_x, y, isAlwaysFalse);
   }
   // ecma 11.9.3 step 7.
   if (__is_boolean(y)) {
-    __jsvalue num_y = __number_value(__js_ToNumber(y));
-    return __js_AbstractEquality(x, &num_y, isAlwaysFalse);
+    TValue num_y = __number_value(__js_ToNumber(y));
+    return __js_AbstractEquality(x, num_y, isAlwaysFalse);
   }
   // ecma 11.9.3 step 8.
   if ((__is_number(x) || __is_string(x) || __is_double(x)) && __is_js_object(y)) {
-    __jsvalue prim_value = __js_ToPrimitive2(y);
-    GCCheckAndIncRf(prim_value.x.asbits, IsNeedRc((prim_value.ptyp)));
-    bool res = __js_AbstractEquality(x, &prim_value, isAlwaysFalse);
-    GCCheckAndDecRf(prim_value.x.asbits, IsNeedRc(prim_value.ptyp));
+    TValue prim_value = __js_ToPrimitive2(y);
+    GCCheckAndIncRf(GET_PAYLOAD(prim_value), IS_NEEDRC(prim_value.x.u64));
+    bool res = __js_AbstractEquality(x, prim_value, isAlwaysFalse);
+    GCCheckAndDecRf(GET_PAYLOAD(prim_value), IS_NEEDRC(prim_value.x.u64));
     return res;
   }
   // ecma 11.9.3 step 9.
   if ((__is_number(y) || __is_string(y) || __is_double(y)) && __is_js_object(x)) {
-    __jsvalue prim_value = __js_ToPrimitive2(x);
-    GCCheckAndIncRf(prim_value.x.asbits, IsNeedRc(prim_value.ptyp));
-    bool res = __js_AbstractEquality(&prim_value, y, isAlwaysFalse);
-    GCCheckAndDecRf(prim_value.x.asbits, IsNeedRc(prim_value.ptyp));
+    TValue prim_value = __js_ToPrimitive2(x);
+    GCCheckAndIncRf(GET_PAYLOAD(prim_value), IS_NEEDRC(prim_value.x.u64));
+    bool res = __js_AbstractEquality(prim_value, y, isAlwaysFalse);
+    GCCheckAndDecRf(GET_PAYLOAD(prim_value), IS_NEEDRC(prim_value.x.u64));
     return res;
   }
   // ecma 11.9.3 step 10.
@@ -910,23 +927,23 @@ bool __js_AbstractEquality(__jsvalue *x, __jsvalue *y, bool &isAlwaysFalse) {
 // This algorithm differs from the SameValue Algorithm (9.12) in its
 // treatment of signed zeroes and NaNs, So if the target does not support
 // float just return __js_SameValue(x, y);
-bool __js_StrictEquality(__jsvalue *x, __jsvalue *y) {
+bool __js_StrictEquality(TValue &x, TValue &y) {
   if (__is_nan(x) || __is_nan(y))
     return false;
   if (__is_negative_zero(x)) {
-    __jsvalue zeroval = __positive_zero_value();
-    return __js_StrictEquality(&zeroval, y);
+    TValue zeroval = __positive_zero_value();
+    return __js_StrictEquality(zeroval, y);
   } else if (__is_negative_zero(y)) {
-    __jsvalue zeroval = __positive_zero_value();
-    return __js_StrictEquality(x, &zeroval);
+    TValue zeroval = __positive_zero_value();
+    return __js_StrictEquality(x, zeroval);
   } else if (__is_double(x) && __is_number(y)) {
     double db1 = __jsval_to_double(x);
-    double db2 = (double) y->x.i32;
+    double db2 = (double) y.x.i32;
     return (fabs(db1 - db2) < NumberMinValue);
   }
   else if(__is_double(y) && __is_number(x)) {
     double db1 = __jsval_to_double(y);
-    double db2 = (double) x->x.i32;
+    double db2 = (double) x.x.i32;
     return (fabs(db1 - db2) < NumberMinValue);
   } else if (__is_double(x) && __is_double(y)) {
     return (fabs(__jsval_to_double(x) - __jsval_to_double(y)) < NumberMinValue);
@@ -937,10 +954,10 @@ bool __js_StrictEquality(__jsvalue *x, __jsvalue *y) {
   return __js_SameValue(x, y);
 }
 
-bool __jsop_stricteq(__jsvalue *x, __jsvalue *y) {
+bool __jsop_stricteq(TValue &x, TValue &y) {
   return __js_StrictEquality(x, y);
 }
 
-bool __jsop_strictne(__jsvalue *x, __jsvalue *y) {
+bool __jsop_strictne(TValue &x, TValue &y) {
   return !__js_StrictEquality(x, y);
 }

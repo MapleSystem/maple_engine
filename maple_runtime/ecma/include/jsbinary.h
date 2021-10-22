@@ -16,10 +16,10 @@
 #ifndef JSBINARY_H
 #define JSBINARY_H
 // ecma 11.9.3
-bool __js_AbstractEquality(__jsvalue *x, __jsvalue *y);
+bool __js_AbstractEquality(TValue &x, TValue &y);
 // ecma 11.9.6
 // This algorithm differs from the SameValue Algorithm (9.12) in its
 // treatment of signed zeroes and NaNs, So if the target does not support
 // float just return __js_SameValue(x, y);
-bool __js_StrictEquality(__jsvalue *x, __jsvalue *y);
+bool __js_StrictEquality(TValue &x, TValue &y);
 #endif

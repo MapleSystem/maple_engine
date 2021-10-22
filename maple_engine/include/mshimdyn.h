@@ -56,7 +56,7 @@ public:
   uint8_t *topGp;
   // AddrMap *heapRefList;     // ref used in heap
   // AddrMap *globalRefList;   // ref used in global memory
-  MValue retVal0;
+  TValue retVal0;
   JsEh *currEH;
   JsPlugin *jsPlugin;
   uint32_t EHstackReuseSize;
@@ -68,84 +68,84 @@ public:
 
 public:
   explicit InterSource();
-  void SetRetval0(MValue, bool);
+  void SetRetval0(TValue &);
   void SetRetval0Object(void *, bool);
   void SetRetval0NoInc (uint64_t);
-  void EmulateStore(uint8_t *, MValue);
-  MValue EmulateLoad(uint8 *, uint32, PrimType);
-  int32_t PassArguments(MValue , void *, MValue *, int32_t, int32_t);
+  void EmulateStore(uint8_t *, TValue &);
+  TValue EmulateLoad(uint8 *, uint32, PrimType);
+  int32_t PassArguments(TValue &, void *, TValue *, int32_t, int32_t);
   inline void *GetSPAddr() {return (void *) (sp + (uint8 *)memory);}
   inline void *GetFPAddr() {return (void *) (fp + (uint8 *)memory);}
   inline void *GetGPAddr() {return (void *) gp;}
-  MValue VmJSopAdd(MValue, MValue);
-  MValue PrimAdd(MValue, MValue, PrimType);
-  MValue JSopArith(MValue &, MValue &, PrimType, Opcode);
-  MValue JSopMul(MValue &, MValue &, PrimType, Opcode);
-  MValue JSopSub(MValue &, MValue &, PrimType, Opcode);
-  MValue JSopDiv(MValue &, MValue &, PrimType, Opcode);
-  MValue JSopRem(MValue &, MValue &, PrimType, Opcode);
-  MValue JSopBitOp(MValue &, MValue &, PrimType, Opcode);
-  MValue JSopCmp(MValue, MValue, Opcode, PrimType);
-  bool JSopSwitchCmp(MValue &, MValue &, MValue &);
-  MValue JSopCVT(MValue, PrimType, PrimType);
-  MValue JSopNewArrLength(MValue &);
-  void JSopSetProp(MValue &, MValue &, MValue &);
-  void JSopInitProp(MValue &, MValue &, MValue &);
-  MValue  JSopNew(MValue &size);
-  MValue  JSopNewIterator(MValue &, MValue &);
-  MValue JSopNextIterator(MValue &);
-  MValue JSopMoreIterator(MValue &);
-  MValue JSopBinary(MIRIntrinsicID, MValue &, MValue &);
-  MValue JSBoolean(MValue &);
-  MValue JSNumber(MValue &);
-  MValue JSopConcat(MValue &, MValue &);
-  MValue JSopNewObj0();
-  MValue JSopNewObj1(MValue &);
-  void JSopSetPropByName (MValue &, MValue &, MValue &, bool isStrict = false);
-  MValue JSopGetProp (MValue &, MValue &);
-  MValue JSopGetPropByName(MValue &, MValue &);
-  MValue JSopDelProp(MValue &, MValue &, bool throw_p = false);
-  void JSopInitPropByName(MValue &, MValue &, MValue &);
-  void JSopInitPropGetter(MValue &, MValue &, MValue &);
-  void JSopInitPropSetter(MValue &, MValue &, MValue &);
-  MValue JSopNewArrElems(MValue &, MValue &);
-  MValue JSopGetBuiltinString(MValue &);
-  MValue JSopGetBuiltinObject(MValue &);
-  MValue JSString(MValue &);
-  MValue JSopLength(MValue &);
-  MValue JSopThis();
-  MValue JSUnary(MIRIntrinsicID, MValue &);
-  MValue JSopUnary(MValue &, Opcode, PrimType);
-  MValue JSopUnaryNeg(MValue &);
-  MValue JSopUnaryLnot(MValue &);
-  MValue JSopUnaryBnot(MValue &);
-  MValue JSopRequire(MValue);
+  TValue VmJSopAdd(TValue &, TValue &);
+  TValue PrimAdd(TValue &, TValue &, PrimType);
+  TValue JSopArith(TValue &, TValue &, PrimType, Opcode);
+  TValue JSopMul(TValue &, TValue &, PrimType, Opcode);
+  TValue JSopSub(TValue &, TValue &, PrimType, Opcode);
+  TValue JSopDiv(TValue &, TValue &, PrimType, Opcode);
+  TValue JSopRem(TValue &, TValue &, PrimType, Opcode);
+  TValue JSopBitOp(TValue &, TValue &, PrimType, Opcode);
+  TValue JSopCmp(TValue, TValue, Opcode, PrimType);
+  bool JSopSwitchCmp(TValue &, TValue &, TValue &);
+  TValue JSopCVT(TValue &, PrimType, PrimType);
+  TValue JSopNewArrLength(TValue &);
+  void JSopSetProp(TValue &, TValue &, TValue &);
+  void JSopInitProp(TValue &, TValue &, TValue &);
+  TValue  JSopNew(TValue &size);
+  TValue  JSopNewIterator(TValue &, TValue &);
+  TValue JSopNextIterator(TValue &);
+  TValue JSopMoreIterator(TValue &);
+  TValue JSopBinary(MIRIntrinsicID, TValue &, TValue &);
+  TValue JSBoolean(TValue &);
+  TValue JSNumber(TValue &);
+  TValue JSopConcat(TValue &, TValue &);
+  TValue JSopNewObj0();
+  TValue JSopNewObj1(TValue &);
+  void JSopSetPropByName (TValue &, TValue &, TValue &, bool isStrict = false);
+  TValue JSopGetProp (TValue &, TValue &);
+  TValue JSopGetPropByName(TValue &, TValue &);
+  TValue JSopDelProp(TValue &, TValue &, bool throw_p = false);
+  void JSopInitPropByName(TValue &, TValue &, TValue &);
+  void JSopInitPropGetter(TValue &, TValue &, TValue &);
+  void JSopInitPropSetter(TValue &, TValue &, TValue &);
+  TValue JSopNewArrElems(TValue &, TValue &);
+  TValue JSopGetBuiltinString(TValue &);
+  TValue JSopGetBuiltinObject(TValue &);
+  TValue JSString(TValue &);
+  TValue JSopLength(TValue &);
+  TValue JSopThis();
+  TValue JSUnary(MIRIntrinsicID, TValue &);
+  TValue JSopUnary(TValue &, Opcode, PrimType);
+  TValue JSopUnaryNeg(TValue &);
+  TValue JSopUnaryLnot(TValue &);
+  TValue JSopUnaryBnot(TValue &);
+  TValue JSopRequire(TValue &);
   void CreateJsPlugin(char *);
   void SwitchPluginContext(JsFileInforNode *);
   void RestorePluginContext(JsFileInforNode *);
-  MValue IntrinCall(MIRIntrinsicID, MValue *, int);
-  MValue NativeFuncCall(MIRIntrinsicID, MValue *, int);
-  MValue BoundFuncCall(MValue *, int);
-  MValue FuncCall(void *, bool, void *, MValue *, int, int, int, bool);
-  MValue IntrinCCall(MValue *, int);
-  MValue FuncCall_JS(__jsobject*, __jsvalue *, void *, __jsvalue *, int32_t);
+  TValue IntrinCall(MIRIntrinsicID, TValue *, int);
+  TValue NativeFuncCall(MIRIntrinsicID, TValue *, int);
+  TValue BoundFuncCall(TValue *, int);
+  TValue FuncCall(void *, bool, void *, TValue *, int, int, int, bool);
+  TValue IntrinCCall(TValue *, int);
+  TValue FuncCall_JS(__jsobject*, TValue &, void *, TValue *, int32_t);
   void JsTry(void *, void *, void *, DynMFunction *);
-  void JSPrint(MValue);
-  void IntrnError(MValue *, int);
+  void JSPrint(TValue);
+  void IntrnError(TValue *, int);
   void InsertProlog(uint16);
   void InsertEplog();
-  MValue JSopGetArgumentsObject(void *);
-  void* CreateArgumentsObject(MValue *, uint32_t, MValue *);
-  MValue GetOrCreateBuiltinObj(__jsbuiltin_object_id);
-  void JSdoubleConst(uint64_t, MValue &);
-  MValue JSIsNan(MValue &);
-  MValue JSDate(MValue &);
+  TValue JSopGetArgumentsObject(void *);
+  void* CreateArgumentsObject(TValue *, uint32_t, TValue &);
+  TValue GetOrCreateBuiltinObj(__jsbuiltin_object_id);
+  void JSdoubleConst(uint64_t, TValue &);
+  TValue JSIsNan(TValue &);
+  TValue JSDate(uint32_t, TValue *);
   uint64_t GetIntFromJsstring(__jsstring* );
-  MValue JSRegExp(MValue &);
-  void JSopSetThisPropByName (MValue &, MValue &);
-  void JSopInitThisPropByName(MValue &);
-  MValue JSopGetThisPropByName(MValue &);
-  void UpdateArguments(int32_t, MValue &);
+  TValue JSRegExp(TValue &);
+  void JSopSetThisPropByName (TValue &, TValue &);
+  void JSopInitThisPropByName(TValue &);
+  TValue JSopGetThisPropByName(TValue &);
+  void UpdateArguments(int32_t, TValue &);
   void SetCurFunc(DynMFunction *func) {
     curDynFunction = func;
   }
@@ -154,7 +154,7 @@ public:
   }
 
 private:
-  bool JSopPrimCmp(Opcode, MValue &, MValue &, PrimType);
+  bool JSopPrimCmp(Opcode, TValue &, TValue &, PrimType);
 };
 
 inline uint32_t GetTagFromPtyp (PrimType ptyp) {
@@ -176,6 +176,35 @@ inline uint32_t GetTagFromPtyp (PrimType ptyp) {
         case PTY_f64:       return  JSTYPE_DOUBLE;
         case PTY_simplestr: return  JSTYPE_STRING;
         case PTY_simpleobj: return  JSTYPE_OBJECT;
+        case kPtyInvalid:
+        case PTY_dynany:
+        case PTY_dynundef:
+        case PTY_dynstr:
+        case PTY_dynobj:
+        case PTY_void:
+        default:            assert(false&&"unexpected");
+    };
+}
+
+inline uint64_t GetNaNCodeFromPtyp (PrimType ptyp) {
+  switch(ptyp) {
+        case PTY_dynnone:  return NAN_NONE;
+        case PTY_dynnull:  return NAN_NULL;
+        case PTY_dynbool:
+        case PTY_u1:       return NAN_BOOLEAN;
+        case PTY_i8:
+        case PTY_i16:
+        case PTY_i32:
+        case PTY_i64:
+        case PTY_u16:
+        case PTY_u8:
+        case PTY_u32:
+        case PTY_a64:
+        case PTY_u64:       return  NAN_NUMBER;
+        case PTY_f32:
+        case PTY_f64:       return  0;
+        case PTY_simplestr: return  NAN_STRING;
+        case PTY_simpleobj: return  NAN_OBJECT;
         case kPtyInvalid:
         case PTY_dynany:
         case PTY_dynundef:
