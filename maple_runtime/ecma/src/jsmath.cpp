@@ -15,6 +15,9 @@
 #include <cmath>
 #include "jsmath.h"
 #include "jstycnv.h"
+
+#define ABS(v) ((((v) < 0) ? -(v) : (v)))
+
 // 15.8.2.1
 TValue __jsmath_pt_abs(TValue &this_math, TValue &value) {
   if (__is_nan(value))
@@ -156,17 +159,17 @@ TValue __jsmath_pt_pow(TValue &this_math, TValue &x, TValue &y) {
   double px = 0.0;
   if (!__is_infinity(x)) {
     px = __jsval_to_double(x);
-    if (std::abs(px) > 1) {
+    if (ABS(px) > 1) {
       if (y_is_infinity)
         return __number_infinity();
       if (y_is_neg_infinity)
         return __positive_zero_value();
     }
-    if (std::abs(px) == 1) {
+    if (ABS(px) == 1) {
       if (y_is_infinity || y_is_neg_infinity)
         return __nan_value();
     }
-    if (std::abs(px) < 1) {
+    if (ABS(px) < 1) {
       if (y_is_infinity)
         return __positive_zero_value();
       if (y_is_neg_infinity)
@@ -245,20 +248,23 @@ TValue __jsmath_pt_round(TValue &this_math, TValue &value) {
 
 // 15.8.2.17
 TValue __jsmath_pt_sqrt(TValue &this_math, TValue &value) {
-  if (__is_nan(value))
-    return value;
-  if (__is_infinity(value)) {
-    if (__is_neg_infinity(value))
+  if (IS_NUMBER(value.x.u64)) {
+    if (value.x.i32 == 0)
+      return value;
+    else if (value.x.i32 < 0)
       return __nan_value();
-    return value;
+    else
+      return (TValue){.x.f64 = sqrt((double)value.x.i32)};
+  } else if (IS_DOUBLE(value.x.u64)) {
+    if (value.x.f64 < 0)
+      return __nan_value();
+    else
+      return (TValue){.x.f64 = sqrt(value.x.f64)};
   }
-  double v = __jsval_to_double(value);
-  if (v == 0.0)
+  if (__is_positive_infinity(value))
     return value;
-  if (v < 0.0)
-    return __nan_value();
-  double f = sqrt(v);
-  return __double_value(f);
+
+  return __nan_value();
 }
 
 // 15.8.2.16

@@ -45,9 +45,21 @@ void __jsobj_set_prototype(__jsobject *obj, __jsobject *proto_obj) {
 static __jsprop *__jsobj_helper_get_property(__jsobject *obj, __jsstring *name, bool createBuiltin = true) {
 #ifdef USE_PROP_MAP
   if (obj->prop_string_map != NULL) {
+    int max = 20; // using linear search up to first 20 properties before using expensive string_map if not found
+    __jsprop *p = obj->prop_list->prev; //start from the last one, backwards for string named properties only
+    while (p && p != obj->prop_list && !p->isIndex && max-- >= 0) {
+      if (p->n.name == name) {
+        if (!__is_undefined_desc(p->desc))
+          return p;
+        else
+          break;
+      }
+      p = p->prev;
+    }
+
     std::map<__jsstring *, __jsprop *>::iterator it;
-      it = obj->prop_string_map->find(name);
-    __jsprop *p = NULL;
+    it = obj->prop_string_map->find(name);
+    p = NULL;
     if (it != obj->prop_string_map->end()) {
       p = it->second;
     } else { // name could be copied to a new string, find by name
@@ -1368,58 +1380,7 @@ TValue __jsobj_internal_Get(__jsobject *obj, TValue &p) {
     return v;
   }
 }
-/*
-TValue __jsobj_internal_Get(__jsobject *obj, maple::TValue &p) {
-  if (obj->object_type == JSREGULAR_ARRAY) {
-    MAPLE_JS_ASSERT(obj->prop_list == NULL);
-    TValue *array = obj->shared.array_props;
-    uint32_t index = __jsarr_getIndex(p);
-    if (index != MAX_ARRAY_INDEX && index <= ARRAY_MAXINDEXNUM_INTERNAL) {
-      uint32_t length = __jsobj_helper_get_length(obj);
-      if (index < length) {
-        TValue elem = __jsarr_GetRegularElem(obj, array, index);
-        return __is_none(&elem) ? __undefined_value() : elem;
-      } else {
-        __jsobject *proto = __jsobj_get_prototype(obj);
-        return __jsobj_internal_Get(proto, p);
-      }
-    } else {
-      __jsstring *name = __js_ToString(p);
-      if (__jsstr_equal_to_builtin(name, JSBUILTIN_STRING_LENGTH)) {
-        if (!__is_string(p)) {
-          memory_manager->RecallString(name);
-        }
-        return array[0];
-      }
-      __jsobject *proto = __jsobj_get_prototype(obj);
-      if (proto) {
-        TValue res = __jsobj_internal_Get(proto, name);
-        if (!__is_string(p)) {
-          memory_manager->RecallString(name);
-        }
-        return res;
-      }
-    }
-  }
-  __jsstring *name = __js_ToString(p);
-  bool isNum;
-  uint32 idxNum = __jsstr_is_numidx(name, isNum);
-  if (isNum) {
-    if(__is_string(p) == false) // if p is a string, name is the same string wrapped by p, and we should not release name.
-      memory_manager->RecallString(name);
-    return __jsobj_internal_GetByValue(obj, idxNum);
-  } else {
-    if (!__is_string(p)) {
-      GCIncRf(name);
-    }
-    TValue v = __jsobj_internal_Get(obj, name);
-    if (!__is_string(p)) {
-      GCDecRf(name);
-    }
-    return v;
-  }
-}
-*/
+
 // Fixme: Donot need this.
 TValue __jsobj_internal_Get(__jsobject *o, __jsbuiltin_string_id id) {
   return __jsobj_internal_Get(o, __jsstr_get_builtin(id));
@@ -1803,6 +1764,11 @@ bool __jsobj_internal_Delete(__jsobject *o, __jsstring *p, bool mark_as_deleted,
         __jsprop_desc desc = prop->desc;
         if (__has_and_configurable(desc)) {
           if (mark_as_deleted) {
+            if (__has_value(prop->desc)) {
+              TValue& tv = prop->desc.named_data_property.value;
+              if (IS_NEEDRC(tv.x.u64))
+                GCDecRf((void*)tv.x.c.payload);
+            }
             prop->desc = __undefined_desc();
           } else {
             if (o->prop_list == prop) {
@@ -3018,7 +2984,8 @@ TValue __jsobj_getprop_by_scalar(TValue &o, __jsstring *p) {
   __jsobject *obj = __js_ToObject(o);
   __jsprop_desc desc = __jsobj_internal_GetProperty(obj, p);
   TValue ret = __jsobj_internal_get_by_desc(obj, desc, &o);
-  // memory_manager->ManageObject(obj, RECALL);
+  if ((uint64_t)obj != GET_PAYLOAD(ret)) // if ret is different from obj, obj should be released
+    memory_manager->ManageObject(obj, RECALL);
   return ret;
 }
 
@@ -3064,7 +3031,7 @@ TValue __jsop_get_this_prop_by_name(TValue &o,  __jsstring *name) {
 
 // make things faster
 void __jsop_set_this_prop_by_name(TValue &o, __jsstring *name, TValue &v, bool noThrowTE) {
-  __jsobject *obj = __is_js_object(o) ? __jsval_to_object(o) : __js_ToObject(o);
+  __jsobject *obj = IS_OBJECT(o.x.u64) ? (__jsobject *)o.x.c.payload : __js_ToObject(o);
   // if name is builtin object like NaN, undefined.. JS will throw a TypeError
   if (__is_global_strict && __jsstr_throw_typeerror(name) && !noThrowTE) {
     MAPLE_JS_TYPEERROR_EXCEPTION();

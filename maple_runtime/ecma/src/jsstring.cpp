@@ -1101,7 +1101,7 @@ static int __jsstr_regexp_exec(__jsstring *js_subject, __jsstring *js_pattern,
     return 0;
 
   int start_offset = global ? last_index : 0;
-  int *offsets = (int *) VMMallocGC((num_captures+1) * 3);
+  int *offsets = (int *) VMMallocGC((num_captures+2) * 3);
   int offset_count = (num_captures+1) * 3;
 
   int res = RegExpExecute(regexp, js_subject, start_offset, offsets,

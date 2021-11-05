@@ -621,6 +621,12 @@ TValue __jsnum_pt_toLocaleString(TValue &this_number, TValue *args, uint32_t num
     } else {
       MAPLE_JS_TYPEERROR_EXCEPTION();
     }
+  } else if (__is_nan(this_number)) {
+    x = __nan_value();
+  } else if (__is_positive_infinity(this_number)) {
+    x = __number_infinity();
+  } else if (__is_neg_infinity(this_number)) {
+    x = __number_neg_infinity();
   } else if (IS_DOUBLE(this_number.x.u64)) {
     x = __double_value(__jsval_to_double(this_number));
   } else {

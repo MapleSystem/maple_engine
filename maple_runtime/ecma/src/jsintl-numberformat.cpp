@@ -712,8 +712,14 @@ TValue FormatNumber(TValue &number_format, TValue &x_val) {
     x = __jsval_to_double(double_val);
   } else if (__is_boolean(x_val)) {
     x = (__jsval_to_boolean(x_val) == TRUE) ? 1.0 : 0.0;
-  } else if (__is_negative_zero(x_val) || __is_nan(x_val) || __is_infinity(x_val)) {
+  } else if (__is_negative_zero(x_val)) {
     x = 0.0;
+  } else if (__is_nan(x_val) || __is_undefined(x_val)) {
+    x = 0.0 / 0.0;
+  } else if (__is_positive_infinity(x_val)) {
+    x = 1.0 / 0.0;
+  } else if (__is_neg_infinity(x_val)) {
+    x = -1.0 / 0.0;
   } else {
     x = __jsval_to_double(x_val);
   }

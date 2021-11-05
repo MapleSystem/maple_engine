@@ -38,7 +38,7 @@ static inline bool __has_get_or_set(__jsprop_desc desc) {
   return (desc.s.fields & (JSPROP_HAS_GET | JSPROP_HAS_SET)) != 0;
 }
 
-static inline bool __has_value(__jsprop_desc desc) {
+static inline bool __has_value(__jsprop_desc& desc) {
   return (desc.s.fields & JSPROP_HAS_VALUE) != 0;
 }
 
@@ -158,7 +158,10 @@ static inline void __set_value_gc(__jsprop_desc *desc, TValue &v) {
 #ifndef RC_NO_MMAP
   UpdateGCReference(&desc->named_data_property.value.x.payload.ptr, v);
 #else
-  GCCheckAndUpdateRf(GET_PAYLOAD(desc->named_data_property.value), IS_NEEDRC(desc->named_data_property.value.x.u64),  GET_PAYLOAD(v), IS_NEEDRC(v.x.u64));
+  if (IS_NEEDRC(v.x.u64))
+    memory_manager->GCIncRf((void*)v.x.c.payload);
+  if (IS_NEEDRC(desc->named_data_property.value.x.u64))
+    memory_manager->GCDecRf((void*)(desc->named_data_property.value.x.c.payload));
 #endif
   __set_value(desc, v);
 }

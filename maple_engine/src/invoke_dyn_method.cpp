@@ -107,34 +107,10 @@ static void PrintUncaughtException(__jsstring *msg) {
 
 #define ABS(v) ((((v) < 0) ? -(v) : (v)))
 
-#define SetRetval0(mv) {\
-  TValue v = (mv);\
-  if (IS_NEEDRC(v.x.u64))\
-    GCIncRf((void *)(v).x.c.payload);\
-  if (IS_NEEDRC(gInterSource->retVal0.x.u64))\
-    GCDecRf((void *)gInterSource->retVal0.x.c.payload);\
-  gInterSource->retVal0.x.u64 = v.x.u64;\
-}
-
-#define SetRetval0NoEncode(mv) {\
-  TValue v = (mv);\
-  if (IS_NEEDRC((v).x.u64))\
-    GCIncRf((void *)(v).x.c.payload);\
-  if (IS_NEEDRC(gInterSource->retVal0.x.u64))\
-    GCDecRf((void *)gInterSource->retVal0.x.c.payload);\
-  gInterSource->retVal0.x.u64 = (v).x.u64;\
-}
-
-#define SetRetval0NoInc(v, t) {\
-  if (IS_NEEDRC(gInterSource->retVal0.x.u64))\
-    GCDecRf((void *)gInterSource->retVal0.x.c.payload);\
-  gInterSource->retVal0.x.u64 = (v) | t;\
-}
-
 #define MPUSH_SELF(v)   {++func.sp;}
 
 #define MPUSHV(v)  (func.operand_stack[++func.sp].x.u64 = (v))
-#define MPUSH(v)   (func.operand_stack[++func.sp].x.u64 = (v).x.u64)
+#define MPUSH(v)   (func.operand_stack[++func.sp] = v)
 #define MPOP()     (func.operand_stack[func.sp--])
 #define MTOP()     (func.operand_stack[func.sp])
 
@@ -537,6 +513,147 @@ uint64_t prop_cache_gen = 1;
   prop_cache[ci].ret = r; \
 }
 
+// OP fusion for OP_regread OP_iassignfpoff RE_checkpoint OP_ireadfpoff sequence
+#define FUSE_REGREAD(r) \
+      if (!isEhHappend) { \
+        /* fuse next OP_regread regRetval0 to reduce Retval0 overwrites */\
+        mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func.pc + sizeof(mre_instr_t))); \
+        if (expr.op == RE_regread && (int32_t)expr.param.frameIdx == -kSregRetval0) { \
+          func.pc += sizeof(mre_instr_t); \
+          /* fuse next OP_iassignfpoff */ \
+          mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func.pc + sizeof(mre_instr_t))); \
+          if (stmt.op == RE_iassignfpoff) { \
+            func.pc += sizeof(mre_instr_t); \
+            CHECKREFERENCEMVALUE(r); \
+            int32_t offset = (int32_t)stmt.param.offset; \
+            uint8 *addr = frame_pointer + offset; \
+            TValue oldV = *((TValue*)addr); \
+            if (IS_NEEDRC(r.x.u64)) { \
+              memory_manager->GCIncRf((void *)r.x.c.payload); \
+            } \
+            if (IS_NEEDRC(oldV.x.u64)) { \
+              memory_manager->GCDecRf((void *)oldV.x.c.payload); \
+            } \
+            *(uint64_t *)addr = r.x.u64; \
+            if (!is_strict && offset > 0 && DynMFunction::is_jsargument(func.header)) { \
+              gInterSource->UpdateArguments(offset / sizeof(void *) - 1, r); \
+            } \
+            func.pc += sizeof(base_node_t); \
+            /* fuse next OP_ireadfpoff  or OP_checkpoint and then OP_ireadfpoff*/ \
+            mre_instr_t &stmt1 = *(reinterpret_cast<mre_instr_t *>(func.pc)); \
+            if (stmt1.op == RE_ireadfpoff && offset == (int32_t)stmt1.param.offset) { \
+              MPUSH(r); \
+              func.pc += sizeof(mre_instr_t); \
+            } else if (stmt1.op == RE_checkpoint) { \
+              func.pc += sizeof(base_node_t); \
+              mre_instr_t &stmt2 = *(reinterpret_cast<mre_instr_t *>(func.pc)); \
+              if (stmt2.op == RE_ireadfpoff && offset == (int32_t)stmt2.param.offset) { \
+                MPUSH(r); \
+                func.pc += sizeof(mre_instr_t); \
+              } \
+            } \
+          } else { \
+            MPUSH(r); \
+            func.pc += sizeof(mre_instr_t); \
+          } \
+          goto *(labels[*func.pc]); \
+        } \
+      }
+
+#define SetRetval0(mv) {\
+  FUSE_REGREAD(mv);\
+  TValue v = (mv);\
+  if (IS_NEEDRC(v.x.u64))\
+    memory_manager->GCIncRf((void *)(v).x.c.payload);\
+  if (IS_NEEDRC(gInterSource->retVal0.x.u64))\
+    memory_manager->GCDecRf((void *)gInterSource->retVal0.x.c.payload);\
+  gInterSource->retVal0.x.u64 = v.x.u64;\
+}
+
+#define SetRetval0NoInc(v, t) {\
+  if (IS_NEEDRC(gInterSource->retVal0.x.u64))\
+    memory_manager->GCDecRf((void *)gInterSource->retVal0.x.c.payload);\
+  gInterSource->retVal0.x.u64 = (v) | t;\
+}
+
+inline TValue IntrinCall(MIRIntrinsicID id, TValue *args, int numArgs, bool is_strict, bool &is_setRetval) {
+  if (id == INTRN_JSOP_NEW)
+    return gInterSource->IntrinCall(id, args, numArgs);
+
+  TValue funcNode = args[0];
+  if (!IS_OBJECT(funcNode.x.u64) || ((__jsobject*)funcNode.x.c.payload)->object_class != JSFUNCTION) {
+    MAPLE_JS_TYPEERROR_EXCEPTION();
+  }
+  __jsobject *f = (__jsobject *)funcNode.x.c.payload;
+  __jsfunction *func = (__jsfunction *)f->shared.fun;
+  if (!func || f->object_class != JSFUNCTION) {
+    MAPLE_JS_TYPEERROR_EXCEPTION();
+  }
+  uint32_t attrs = func->attrs;
+  if (!(attrs & 0xff & JSFUNCPROP_NATIVE))
+    return gInterSource->IntrinCall(id, args, numArgs);
+  void *func_fp = func->fp;
+  if (func_fp == __jsobj_defineProperty || func_fp == __js_new_function)
+    return gInterSource->IntrinCall(id, args, numArgs);
+
+  int arg_count = numArgs - 2;
+  TValue this_arg = args[1];
+  TValue *arguments = &args[2];
+
+  bool varg_p = attrs >> 24;
+  uint8_t nargs = attrs >> 16 & 0xff;
+
+  TValue return_value;
+  TValue old_this = __js_ThisBinding;
+  __js_ThisBinding = this_arg;
+
+  if (varg_p) {
+    TValue (*fp)(TValue &, TValue *, uint32_t) = (TValue(*)(TValue &, TValue *, uint32_t))func_fp;
+    return_value = (*fp)(this_arg, arguments, arg_count);
+  } else {
+    if (arg_count < (uint32_t)nargs) {
+      for (uint32_t i = 0; i < arg_count; i++) {
+        if (__is_none(arguments[i])) {
+          MAPLE_JS_REFERENCEERROR_EXCEPTION();
+        }
+      }
+      for (uint32_t i = arg_count; i < (uint32_t)nargs; i++) {
+        arguments[i] = __undefined_value();
+      }
+    }
+    switch (nargs) {
+      case 0: {
+        TValue (*fp)(TValue &) = (TValue(*)(TValue &))func_fp;
+        return_value = (*fp)(this_arg);
+        break;
+      }
+      case 1: {
+        TValue (*fp)(TValue &, TValue &) = (TValue(*)(TValue &, TValue &))func_fp;
+        return_value = (*fp)(this_arg, arguments[0]);
+        break;
+      }
+      case 2: {
+        TValue (*fp)(TValue &, TValue &, TValue &) =
+          (TValue(*)(TValue &, TValue &, TValue &))func_fp;
+        return_value = (*fp)(this_arg, arguments[0], arguments[1]);
+        break;
+      }
+      case 3: {
+        TValue (*fp)(TValue &, TValue &, TValue &, TValue &) =
+          (TValue(*)(TValue &, TValue &, TValue &, TValue &))func_fp;
+        return_value = (*fp)(this_arg, arguments[0], arguments[1], arguments[2]);
+        break;
+      }
+      default:
+        MAPLE_JS_EXCEPTION(false && "NYI");
+    }
+  }
+  __js_ThisBinding = old_this;
+  is_setRetval = true;
+
+  return return_value;
+}
+
 inline bool PROP_CACHE_GET(TValue &obj, TValue &name, TValue &r) {
   int ci = PROP_CACHE_HASH(obj, name);
   if (prop_cache_gen == prop_cache[ci].g && prop_cache[ci].o == obj.x.a64 && prop_cache[ci].p == name.x.a64) {
@@ -762,22 +879,22 @@ label_OP_constval:
     // Handle expression node: constval
     mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func.pc));
     DEBUGCOPCODE(constval, Expr);
-    TValue res = {.x.u64 = 0};
+    TValue res = {.x.u64 = NAN_NUMBER};
     switch(expr.primType) {
         case PTY_i8:  res.x.i32 = expr.param.constval.i8;  break;
         case PTY_i16:
         case PTY_i32: res.x.i32 = expr.param.constval.i16; break;
-        case PTY_i64: res.x.i64 = expr.param.constval.i16; break;
+        case PTY_i64: res.x.i32 = expr.param.constval.i16; break;
         case PTY_u1:
-        case PTY_u8:  res.x.u64 = expr.param.constval.u8;  break;
+        case PTY_u8:  res.x.u32 = expr.param.constval.u8;  break;
         case PTY_u16:
         case PTY_u32:
         case PTY_u64:
         case PTY_a32: // running on 64-bits machine
-        case PTY_a64: res.x.u64 = expr.param.constval.u16; break;
+        case PTY_a64: res.x.u32 = expr.param.constval.u16; break;
         default: MASSERT(false, "Unexpected type for OP_constval: 0x%02x", res.x.c.type);
     }
-    res.x.u64 = (res.x.u64 == 0) ? POS_ZERO : (res.x.u64 | NAN_NUMBER);
+    //res.x.u64 = /*(res.x.u64 == 0) ? POS_ZERO : */(res.x.u64 | NAN_NUMBER);
     MPUSH(res);
     func.pc += sizeof(mre_instr_t);
     goto *(labels[*func.pc]);
@@ -1545,7 +1662,6 @@ label_OP_dassign:
         // MARGS(idx) = res;
         }
     else {
-        //mEncode(res);
         MLOCALS(-idx).x.u64 = res.x.u64;
     }
     func.pc += sizeof(mre_instr_t);
@@ -1581,12 +1697,12 @@ label_OP_iassignoff:
     TValue &res = MPOP();
     TValue &base = MPOP();
     if (IS_NEEDRC(res.x.u64)) {
-      GCIncRf((void *)res.x.c.payload);
+      memory_manager->GCIncRf((void *)res.x.c.payload);
     }
     uint8_t* addr = (uint8_t*)base.x.c.payload + (int32_t)stmt.param.offset;
     TValue v = *(TValue *)addr;
     if (IS_NEEDRC(v.x.u64)) {
-      GCDecRf((void *)v.x.c.payload);
+      memory_manager->GCDecRf((void *)v.x.c.payload);
     }
     *(uint64_t *)addr = res.x.u64;
 
@@ -1623,7 +1739,13 @@ label_OP_regassign:
     DEBUGSOPCODE(regassign, Stmt, idx);
     switch (idx) {
      case -kSregRetval0: {
-      SetRetval0NoEncode(res);
+      TValue v = res;
+      if (IS_NEEDRC(v.x.u64))
+        memory_manager->GCIncRf((void *)(v).x.c.payload);
+      if (IS_NEEDRC(gInterSource->retVal0.x.u64))
+        memory_manager->GCDecRf((void *)gInterSource->retVal0.x.c.payload);
+      gInterSource->retVal0.x.u64 = v.x.u64;
+      //SetRetval0(res);
       break;
     }
      case -kSregThrownval:
@@ -1696,10 +1818,7 @@ label_OP_return:
     // Handle statement node: return
     DEBUGOPCODE(return, Stmt);
 
-    TValue ret;
-    //ret.x.u64 = 0; // return 0 means ok
-    //ret.ptyp = JSTYPE_NONE;
-    ret = __none_value();
+    TValue ret = __none_value();
     gInterSource->InsertEplog();
     TVALUEBITMASK(ret); // If returning void, it is set to {0x0, PTY_void}
     return ret;
@@ -1727,18 +1846,16 @@ label_OP_call:
     DEBUGOPCODE(call, Stmt);
     // get the parameters
     TValue args[MAXCALLARGNUM];
-    int numArgs = stmt.param.intrinsic.numOpnds;
-    int startArg = 1;
-    int i = 0;
+    int numArgs = stmt.param.intrinsic.numOpnds - 1;
+    //int startArg = 1;
     // assert(numArgs < MAXCALLARGNUM && "too many args");
-    for (i = 0; i < numArgs - startArg; i ++) {
-      TValue &v = MPOP();
-      args[numArgs - startArg - i - 1] = v;
+    for (int i = numArgs - 1; i >= 0; i--) {
+      args[i] = MPOP();
     }
     TValue thisVal,env;
     thisVal = env = NullPointValue();
     int32_t offset = gInterSource->PassArguments(thisVal, (void *)env.x.u64, args,
-                    numArgs - startArg, -1);
+                    numArgs, -1);
     gInterSource->sp += offset;
     // TValue this_arg = MvalToJsval(thisVal);
     // TValue old_this = __js_entry_function(&this_arg, false);
@@ -1765,16 +1882,14 @@ label_OP_icall:
     TValue args[MAXCALLARGNUM];
     int numArgs = stmt.param.intrinsic.numOpnds;
     //MASSERT(numArgs >= 2, "num of args of icall should be gt than 2");
-    int i = 0;
-    for (i = 0; i < numArgs - 1; i ++) {
-      TValue &v = MPOP();
-      args[numArgs - i - 1] = v;
+    for (int i = numArgs - 1; i > 0; i--) {
+      args[i] = MPOP();
     }
-    TValue &args0 = MPOP();
+    TValue args0 = MPOP();
     args[0] = __function_value((void *)args0.x.c.payload);
     TValue retCall = gInterSource->FuncCall((void *)args0.x.c.payload, false, nullptr, args, numArgs, 2, -1, false);
 
-    if (GET_PAYLOAD(retCall) == (uint64_t) Exec_handle_exc && GET_TYPE(retCall) == JSTYPE_NONE) {
+    if (IS_NONE(retCall.x.u64) && GET_PAYLOAD(retCall) == (uint64_t) Exec_handle_exc) {
       void *newPc = gInterSource->currEH->GetEHpc(&func);
       if (newPc) {
         func.pc = (uint8_t *)newPc;
@@ -1814,16 +1929,17 @@ label_OP_intrinsiccall:
       }
       break;
     case INTRN_JS_STRING:
-      MIR_ASSERT(argnums == 1);
+      //MIR_ASSERT(argnums == 1);
+      TValue retMv;
       try {
         TValue &v0 = MPOP();
-        TValue retMv = gInterSource->JSString(v0);
-        SetRetval0(retMv);
+        retMv = gInterSource->JSString(v0);
       }
       CATCHINTRINSICOP();
+      SetRetval0(retMv);
       break;
     case INTRN_JS_BOOLEAN: {
-      MIR_ASSERT(argnums == 1);
+      //MIR_ASSERT(argnums == 1);
       TValue &v0 = MPOP();
       CHECKREFERENCEMVALUE(v0);
       TValue retMv = gInterSource->JSBoolean(v0);
@@ -1831,22 +1947,22 @@ label_OP_intrinsiccall:
       break;
     }
     case INTRN_JS_NUMBER: {
-      MIR_ASSERT(argnums == 1);
-
-      try {
-        TValue &v0 = MPOP();
-        if (IS_NUMBER(v0.x.u64) || IS_DOUBLE(v0.x.u64)) {
-          SetRetval0NoEncode(v0);
-        } else {
-          TValue retMv = gInterSource->JSNumber(v0);
-          SetRetval0(retMv);
+      //MIR_ASSERT(argnums == 1);
+      TValue &v0 = MPOP();
+      if (IS_NUMBER(v0.x.u64) || IS_DOUBLE(v0.x.u64)) {
+        SetRetval0(v0);
+      } else {
+        TValue retMv;
+        try {
+          retMv = gInterSource->JSNumber(v0);
         }
+        CATCHINTRINSICOP();
+        SetRetval0(retMv);
       }
-      CATCHINTRINSICOP();
       break;
     }
     case INTRN_JSOP_CONCAT: {
-      MIR_ASSERT(argnums == 2);
+      //MIR_ASSERT(argnums == 2);
       TValue &arg1 = MPOP();
       TValue &arg0 = MPOP();
       TValue retMv = gInterSource->JSopConcat(arg0, arg1);
@@ -1854,12 +1970,13 @@ label_OP_intrinsiccall:
       break;
     }  // Objects
     case INTRN_JS_NEW_OBJECT_0: {
-      MIR_ASSERT(argnums == 0);
-      SetRetval0(__object_value(__js_new_obj_obj_0()));
+      //MIR_ASSERT(argnums == 0);
+      TValue retMv = __object_value(__js_new_obj_obj_0());
+      SetRetval0(retMv);
       break;
     }
     case INTRN_JS_NEW_OBJECT_1: {
-      MIR_ASSERT(argnums >= 1);
+      //MIR_ASSERT(argnums >= 1);
       for(int tmp = argnums; tmp > 1; --tmp) {
           MPOP();
       }
@@ -1869,7 +1986,7 @@ label_OP_intrinsiccall:
       break;
     }
     case INTRN_JSOP_INIT_THIS_PROP_BY_NAME: {
-      MIR_ASSERT(argnums == 1);
+      //MIR_ASSERT(argnums == 1);
       TValue &v0 = MPOP();
       __jsstring *v1 = (__jsstring *)v0.x.c.payload;
       TValue &v = __js_Global_ThisBinding;
@@ -1878,7 +1995,7 @@ label_OP_intrinsiccall:
       break;
     }
     case INTRN_JSOP_SET_THIS_PROP_BY_NAME:{
-      MIR_ASSERT(argnums == 2);
+      //MIR_ASSERT(argnums == 2);
       TValue &arg1 = MPOP();
       TValue &arg0 = MPOP();
       CHECKREFERENCEMVALUE(arg1);
@@ -1897,7 +2014,7 @@ label_OP_intrinsiccall:
       break;
     }
     case INTRN_JSOP_SETPROP_BY_NAME: {
-      MIR_ASSERT(argnums == 3);
+      //MIR_ASSERT(argnums == 3);
       TValue &v2 = MPOP();
       TValue &v1 = MPOP();
       TValue &v0 = MPOP();
@@ -1915,59 +2032,60 @@ label_OP_intrinsiccall:
       break;
     }
     case INTRN_JSOP_GETPROP: {
-      MIR_ASSERT(argnums == 2);
+      //MIR_ASSERT(argnums == 2);
       TValue &v1 = MPOP();
       TValue &v0 = MPOP();
       CHECKREFERENCEMVALUE(v0);
+      TValue retMv;
       try {
-        TValue retMv = __jsop_getprop(v0, v1);
-        SetRetval0(retMv);
+        retMv = __jsop_getprop(v0, v1);
       }
       CATCHINTRINSICOP();
+      SetRetval0(retMv);
       break;
     }
     case INTRN_JSOP_GETPROP_BY_NAME: {
-      MIR_ASSERT(argnums == 2);
+      //MIR_ASSERT(argnums == 2);
       TValue &v1 = MPOP();
       TValue &v0 = MPOP();
       TValue retMv;
-      if (PROP_CACHE_GET(v0, v1, retMv)) {
-        SetRetval0(retMv);
-        break;
-      }
       CHECKREFERENCEMVALUE(v0);
-      try {
-        retMv = gInterSource->JSopGetPropByName(v0, v1);
-        SetRetval0(retMv);
-        PROP_CACHE_SET(v0, v1, retMv);
+      if (!PROP_CACHE_GET(v0, v1, retMv)) {
+        try {
+          retMv = gInterSource->JSopGetPropByName(v0, v1);
+          PROP_CACHE_SET(v0, v1, retMv);
+        }
+        CATCHINTRINSICOP();
       }
-      CATCHINTRINSICOP();
+      SetRetval0(retMv);
       break;
     }
     case INTRN_JS_DELNAME: {
-      MIR_ASSERT(argnums == 2);
+      //MIR_ASSERT(argnums == 2);
       TValue &v1 = MPOP();
       TValue &v0 = MPOP();
       CHECKREFERENCEMVALUE(v0);
+      TValue retMv;
       try {
-        TValue retMv = gInterSource->JSopDelProp(v0, v1, is_strict);
-        SetRetval0(retMv);
+        retMv = gInterSource->JSopDelProp(v0, v1, is_strict);
         PROP_CACHE_INVALIDATE;
       }
       CATCHINTRINSICOP();
+      SetRetval0(retMv);
       break;
     }
     case INTRN_JSOP_DELPROP: {
-      MIR_ASSERT(argnums == 2);
+      //MIR_ASSERT(argnums == 2);
       TValue &v1 = MPOP();
       TValue &v0 = MPOP();
       CHECKREFERENCEMVALUE(v0);
+      TValue retMv;
       try {
-        TValue retMv = gInterSource->JSopDelProp(v0, v1, is_strict);
+        retMv = gInterSource->JSopDelProp(v0, v1, is_strict);
         PROP_CACHE_INVALIDATE;
-        SetRetval0(retMv);
       }
       CATCHINTRINSICOP();
+      SetRetval0(retMv);
       break;
     }
     case INTRN_JSOP_INITPROP: {
@@ -2073,19 +2191,19 @@ label_OP_intrinsiccall:
             } else {
               op0.x.i32 = r;
             }
-            SetRetval0NoEncode(op0);
+            SetRetval0(op0);
             break;
           } else if (IS_DOUBLE(op0.x.u64)) {
             double r;
             r = op0.x.f64 + op1.x.i32;
             if (r == 0) {
               op0.x.u64 = POS_ZERO;
-              SetRetval0NoEncode(op0);
+              SetRetval0(op0);
               break;
             }
             if (ABS(r) <= NumberMaxValue) {
               op0.x.f64 = r;
-              SetRetval0NoEncode(op0);
+              SetRetval0(op0);
               break;
             }
           }
@@ -2095,40 +2213,43 @@ label_OP_intrinsiccall:
             r = op1.x.f64 + op0.x.f64;
             if (r == 0) {
               op0.x.u64 = POS_ZERO;
-              SetRetval0NoEncode(op0);
+              SetRetval0(op0);
               break;
             }
             if (ABS(r) <= NumberMaxValue && ABS(r) >= NumberMinValue) {
               op1.x.f64 = r;
-              SetRetval0NoEncode(op1);
+              SetRetval0(op1);
               break;
             }
           } else if (IS_NUMBER(op0.x.u64)) {
             r = op1.x.f64 + op0.x.i32;
             if (r == 0) {
               op0.x.u64 = POS_ZERO;
-              SetRetval0NoEncode(op0);
+              SetRetval0(op0);
               break;
             }
             if (ABS(r) <= NumberMaxValue && ABS(r) >= NumberMinValue) {
               op1.x.f64 = r;
-              SetRetval0NoEncode(op1);
+              SetRetval0(op1);
               break;
             }
           }
         }
         CHECKREFERENCEMVALUE(op0);
         CHECKREFERENCEMVALUE(op1);
+        TValue retMv;
         try {
-          TValue retMv = gInterSource->VmJSopAdd(op0, op1);
-          SetRetval0(retMv);
+          //TValue retMv = gInterSource->VmJSopAdd(op0, op1);
+          retMv = __jsop_add(op0, op1);
         }
         CATCHINTRINSICOP();
+        SetRetval0(retMv);
       }
       break;
       case INTRN_JS_NEW_ARR_LENGTH: {
         TValue &conVal = MPOP();
-        SetRetval0(__object_value(__js_new_arr_length(conVal)));
+        TValue retMv = __object_value(__js_new_arr_length(conVal));
+        SetRetval0(retMv);
         break;
       }
       case INTRN_JSOP_SETPROP: {
@@ -2160,16 +2281,16 @@ label_OP_intrinsiccall:
       case INTRN_JSOP_NEW: {
         TValue args[MAXCALLARGNUM];
         int numArgs = stmt.param.intrinsic.numOpnds;
-        int i = 0;
         //assert(numArgs < MAXCALLARGNUM && numArgs >= 2 && "num of args of jsop call is wrong");
-        for (i = 0; i < numArgs; i ++) {
-          TValue v0 = MPOP();
-          if ((numArgs - i - 1) == 0)
-            CHECKREFERENCEMVALUE(v0);
-          args[numArgs - i - 1] = v0;
+        for (int i = numArgs - 1; i >= 0; i--) {
+          args[i] = MPOP();
         }
+        CHECKREFERENCEMVALUE(args[0]);
+        TValue retCall;
+        bool is_setRetVal = false;
         try {
-          TValue retCall = gInterSource->IntrinCall(intrnid, args, numArgs);
+          //TValue retCall = gInterSource->IntrinCall(intrnid, args, numArgs);
+          retCall = IntrinCall(intrnid, args, numArgs, is_strict, is_setRetVal);
           if (IS_NONE(retCall.x.u64) && GET_PAYLOAD(retCall) == (uint64_t) Exec_handle_exc) {
             isEhHappend = true;
             newPc = gInterSource->currEH->GetEHpc(&func);
@@ -2225,6 +2346,9 @@ label_OP_intrinsiccall:
           }
           gInterSource->currEH->UpdateState(OP_throw);
           newPc = gInterSource->currEH->GetEHpc(&func);
+        }
+        if (is_setRetVal) {
+          SetRetval0(retCall);
         }
         break;
       }
@@ -2430,7 +2554,7 @@ label_OP_ireadfpoff: // offset from stack frame
     uint8 *addr = frame_pointer + offset;
     uint64_t lValue = *((uint64_t *)addr);
     if (lValue == 0) {
-      lValue = NONE_VALUE; // NONE value
+      lValue = NAN_NONE; // NONE value
     }
     MPUSHV(lValue);
 
@@ -2644,19 +2768,19 @@ label_OP_intrinsicop:
        uint32_t argnums = numOpnds;
        switch (intrnid) {
          case INTRN_JS_GET_BISTRING: {
-           MIR_ASSERT(argnums == 1);
+           //MIR_ASSERT(argnums == 1);
            TValue &v0 = MPOP();
            retMv = __string_value(__jsstr_get_builtin((__jsbuiltin_string_id)v0.x.u32));
            break;
          }
          case INTRN_JS_GET_BIOBJECT: {
-           MIR_ASSERT(argnums == 1);
+           //MIR_ASSERT(argnums == 1);
            TValue &v0 = MPOP();
            retMv = __object_value(__jsobj_get_or_create_builtin((__jsbuiltin_object_id)v0.x.u32));
            break;
          }
          case INTRN_JS_BOOLEAN: {
-           MIR_ASSERT(argnums == 1);
+           //MIR_ASSERT(argnums == 1);
            TValue &op0 = MTOP();
            if (IS_BOOLEAN(op0.x.u64)) {
              func.pc += sizeof(mre_instr_t);
@@ -2685,24 +2809,24 @@ label_OP_intrinsicop:
            break;
          }
          case INTRN_JS_STRING: {
-           MIR_ASSERT(argnums == 1);
+           //MIR_ASSERT(argnums == 1);
            TValue &v0 = MPOP();
            retMv = gInterSource->JSString(v0);
            break;
          }
          case INTRN_JSOP_LENGTH: {
-           MIR_ASSERT(argnums == 1);
+           //MIR_ASSERT(argnums == 1);
            TValue &v0 = MPOP();
            retMv = gInterSource->JSopLength(v0);
            break;
          }
          case INTRN_JSOP_THIS: {
-           MIR_ASSERT(argnums == 0);
+           //MIR_ASSERT(argnums == 0);
            retMv = gInterSource->JSopThis();
            break;
          }
          case INTRN_JSOP_GET_THIS_PROP_BY_NAME: {
-           MIR_ASSERT(argnums == 1);
+           //MIR_ASSERT(argnums == 1);
            TValue &v0 = MPOP();
            if (PROP_CACHE_GET_THIS(__js_Global_ThisBinding, v0, retMv))
              break;
@@ -2711,35 +2835,35 @@ label_OP_intrinsicop:
            break;
          }
          case INTRN_JSOP_GETPROP: {
-           MIR_ASSERT(argnums == 2);
+           //MIR_ASSERT(argnums == 2);
            TValue &v1 = MPOP();
            TValue &v0 = MPOP();
            retMv = gInterSource->JSopGetProp(v0, v1);
            break;
          }
          case INTRN_JS_GET_ARGUMENTOBJECT: {
-           MIR_ASSERT(argnums == 0);
+           //MIR_ASSERT(argnums == 0);
            retMv = __object_value((__jsobject *)func.argumentsObj);
            break;
          }
          case INTRN_JS_GET_REFERENCEERROR_OBJECT: {
-           MIR_ASSERT(argnums == 0);
+           //MIR_ASSERT(argnums == 0);
            retMv = __object_value(__jsobj_get_or_create_builtin(JSBUILTIN_REFERENCEERRORCONSTRUCTOR));
            break;
          }
          case INTRN_JS_GET_TYPEERROR_OBJECT: {
-           MIR_ASSERT(argnums == 0);
+           //MIR_ASSERT(argnums == 0);
            retMv = __object_value(__jsobj_get_or_create_builtin(JSBUILTIN_TYPEERROR_CONSTRUCTOR));
            break;
          }
          case INTRN_JS_REGEXP: {
-           MIR_ASSERT(argnums == 1);
+           //MIR_ASSERT(argnums == 1);
            TValue &v0 = MPOP();
            retMv = gInterSource->JSRegExp(v0);
            break;
          }
          case INTRN_JSOP_SWITCH_CMP: {
-           MIR_ASSERT(argnums == 3);
+           //MIR_ASSERT(argnums == 3);
            TValue &v2 = MPOP();
            TValue &v1 = MPOP();
            TValue &v0 = MPOP();
@@ -2803,10 +2927,10 @@ label_OP_iassignfpoff:
 #endif
     {
       if (IS_NEEDRC(rVal.x.u64)) {
-        GCIncRf((void *)rVal.x.c.payload);
+        memory_manager->GCIncRf((void *)rVal.x.c.payload);
       }
       if (IS_NEEDRC(oldV.x.u64)) {
-        GCDecRf((void *)oldV.x.c.payload);
+        memory_manager->GCDecRf((void *)oldV.x.c.payload);
       }
       *(uint64_t *)addr = rVal.x.u64;
     }

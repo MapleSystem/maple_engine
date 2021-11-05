@@ -120,22 +120,6 @@ enum __jstype : uint32_t {
 #define PAYLOAD_MASK 0x0000FFFFFFFFFFFF
 #define POS_ZERO     0x7FF3000000000000
 #define NEG_ZERO     0x8000000000000000
-#define NONE_VALUE   0x7FFA000000000000  // JSTYPE_NONE = 10
-
-#define mEncode(v) {\
-  if (v.ptyp < JSTYPE_DOUBLE) {\
-    v.x.c.type = v.ptyp | NAN_BASE;\
-  }\
-}
-
-#define mDecode(v) {\
-  if (NOT_DOUBLE(v.x.u64)){\
-    v.ptyp = v.x.c.type & ~NAN_BASE;\
-    v.x.u64 &= PAYLOAD_MASK;\
-  } else {\
-    v.ptyp = JSTYPE_DOUBLE;\
-  }\
-}
 
 enum __jsbuiltin_object_id : uint8_t {  // must in accordance with js_value.h:js_builtin_id in the front-end (js2mpl/include/jsvalue.h)
   JSBUILTIN_GLOBALOBJECT = 0,

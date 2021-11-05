@@ -34,7 +34,6 @@ __jsiterator *__jsop_valueto_iterator(TValue &value, uint32_t flags) {
   itr->flags = (uint8_t)flags;
   itr->isNew = true;
 
-  __create_builtin_property(itr->obj, NULL);
   if (itr->obj->object_class == JSARRAY) {
     __jsobj_helper_convert_to_generic(itr->obj);
     uint32_t len = __jsobj_helper_get_length(itr->obj);

@@ -309,38 +309,8 @@ __jsstring *__js_ToStringSlow(TValue &v) {
 }
 
 // ecma 9.9
-/*
 __jsobject *__js_ToObject(TValue &v) {
-  if (__is_js_object(v))
-    return v->x.obj;
-  TValue res;
-  switch (__jsval_typeof(v)) {
-    case JSTYPE_UNDEFINED:
-    case JSTYPE_NULL:
-    case JSTYPE_NONE:
-      MAPLE_JS_TYPEERROR_EXCEPTION();
-      break;
-    case JSTYPE_BOOLEAN:
-      res = __js_new_boo_obj(NULL, v, 1);
-      break;
-    case JSTYPE_STRING:
-      res = __js_new_str_obj(NULL, v, 1);
-      break;
-    case JSTYPE_DOUBLE:
-    case JSTYPE_NUMBER:
-    case JSTYPE_NAN:
-    case JSTYPE_INFINITY:
-      res = __js_new_num_obj(NULL, v, 1);
-      break;
-    default:
-      MAPLE_JS_ASSERT(false);
-      break;
-  }
-  return __jsval_to_object(&res);
-}
-*/
-__jsobject *__js_ToObject(TValue &v) {
-  if (__is_js_object(v))
+  if (IS_OBJECT(v.x.u64))
     return (__jsobject *)v.x.c.payload;
   TValue res;
   if (IS_NUMBER(v.x.u64) || IS_DOUBLE(v.x.u64) || IS_NAN(v.x.u64) || IS_INFINITY(v.x.u64))
@@ -360,11 +330,11 @@ __jsobject *__js_ToObject(TValue &v) {
 // ecma 9.11
 bool __js_IsCallable(TValue &v) {
   // Undefined Null Boolean Number String
-  if (__is_primitive(v)) {
-    return false;
-  }
+  //if (__is_primitive(v)) {
+  //  return false;
+  //}
   // Object
-  MAPLE_JS_ASSERT(__is_js_object(v));
+  //MAPLE_JS_ASSERT(__is_js_object(v));
   // If the argument object has a [[Call]] internal method,
   // then return true, otherwise return false.
   // ??? Iff v is a function has a [[Call]] internal method?

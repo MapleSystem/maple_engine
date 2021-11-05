@@ -386,9 +386,9 @@ void MemoryManager::DumpMMStats() {
 static void BatchRCDec(void* lowAddr, void* hiAddr) {
   uint8 *addr = (uint8*)lowAddr;
   while(addr < hiAddr) {
-    void **local = (void**)addr;
-    if (IS_NEEDRC((long)(*local))) {
-      GCDecRf(*local);
+    TValue* local = (TValue*)addr;
+    if (IS_NEEDRC(local->x.u64)) {
+      GCDecRf((void*)local->x.c.payload);
     }
     addr += sizeof(void*);
   }
@@ -833,7 +833,7 @@ void MemoryManager::RecallMem(void *mem, uint32 size) {
 #if DEBUGGC
   assert(IsAlignedBy4(offset) && "not aligned by 4 bytes");
 #endif
-  MIR_ASSERT(offset < total_size_);
+  //MIR_ASSERT(offset < total_size_);
 
 #ifdef MM_DEBUG
   app_mem_usage -= (alignedsize + head_size);
@@ -906,7 +906,7 @@ void MemoryManager::RecallArray_props(TValue *array_props) {
       mmap->RemoveAddrMapNode(mmap_node);
 #endif
 #if MACHINE64
-      GCDecRf((void *)GET_PAYLOAD(array_props[i]));
+      GCDecRf((void *)array_props[i].x.c.payload);
 #else
       GCDecRf(array_props[i].x.payload.ptr);
 #endif
@@ -932,15 +932,14 @@ void MemoryManager::RecallList(__json_list *list) {
 void MemoryManager::GCDecRf(void *addr) {
   if (TurnoffGC())
     return;
-  void *true_addr = (void*)((long)addr & PAYLOAD_MASK);
-  if (!IsHeap(true_addr)) {
+  if (!IsHeap(addr)) {
     return;
   }
 #ifdef MM_RC_STATS
   num_rcdec++;
 #endif
-  MemHeader &header = GetMemHeader(true_addr);
-  MIR_ASSERT(header.refcount > 0);  // must > 0
+  MemHeader &header = GetMemHeader(addr);
+//  MIR_ASSERT(header.refcount > 0);  // must > 0
   if(header.refcount < UINT14_MAX)
     header.refcount--;
   // DEBUG
@@ -948,22 +947,20 @@ void MemoryManager::GCDecRf(void *addr) {
   if (header.refcount == 0) {
     switch (header.memheadtag) {
       case MemHeadJSObj: {
-        __jsobject *obj = (__jsobject *)true_addr;
-        ManageObject(obj, RECALL);
+        ManageObject((__jsobject *)addr, RECALL);
         return;
       }
       case MemHeadJSString: {
-        __jsstring *str = (__jsstring *)true_addr;
-        RecallString(str);
+        RecallString((__jsstring *)addr);
         return;
       }
       case MemHeadEnv: {
-        ManageEnvironment(true_addr, RECALL);
+        ManageEnvironment(addr, RECALL);
         return;
       }
       case MemHeadJSIter: {
-        MemHeader &header = memory_manager->GetMemHeader(true_addr);
-        RecallMem(true_addr, sizeof(__jsiterator));
+        MemHeader &header = memory_manager->GetMemHeader(addr);
+        RecallMem(addr, sizeof(__jsiterator));
         return;
       }
       default:
@@ -972,9 +969,9 @@ void MemoryManager::GCDecRf(void *addr) {
   }
 
   // RC != 0 after decrease; if it's jsobject, then possible root of cycle
-  if (GetMemHeader(true_addr).memheadtag == MemHeadJSObj && GetMemHeader(true_addr).in_roots == false) {
-    GetMemHeader(true_addr).in_roots = true;
-    crc_candidate_roots.insert(true_addr);
+  if (header.refcount == 1 && GetMemHeader(addr).memheadtag == MemHeadJSObj && GetMemHeader(addr).in_roots == false) {
+    GetMemHeader(addr).in_roots = true;
+    crc_candidate_roots.insert(addr);
   }
 }
 
@@ -1224,21 +1221,24 @@ void MemoryManager::ManageChildObj(__jsobject *obj, ManageType flag) {
 }
 
 void MemoryManager::ManageJsvalue(TValue &val, ManageType flag) {
-  if (flag == SWEEP || is_sweep) {
+  if (!IS_NEEDRC(val.x.u64))
+    return;
+  if (flag == RECALL) {
+    GCDecRf((void *)val.x.c.payload);
+    //GCCheckAndDecRf(GET_PAYLOAD(val), IS_NEEDRC(val.x.u64));
+  } else if (flag == SWEEP || is_sweep) {
     // if the val is an object, then do nothing
     if (__is_string(val)) {
 #ifdef MACHINE64
-      GCDecRf((void *)GET_PAYLOAD(val));
+      GCDecRf((void *)val.x.c.payload);
 #else
       GCDecRf(val->x.ptr);
 #endif
     }
-  } else if (flag == RECALL) {
-    GCCheckAndDecRf(GET_PAYLOAD(val), IS_NEEDRC(val.x.u64));
   } else {
     if (__is_js_object(val)) {
 #ifdef MACHINE64
-      ManageChildObj((__jsobject *)GET_PAYLOAD(val), flag);
+      ManageChildObj((__jsobject *)val.x.c.payload, flag);
 #else
       ManageChildObj(val->x.obj, flag);
 #endif
@@ -1264,7 +1264,8 @@ void MemoryManager::ManageEnvironment(void *envptr, ManageType flag) {
   void *parentenv = (void*)(*ptr);
   if (parentenv) {
     if (flag == RECALL) {
-      GCDecRf(parentenv);
+      TValue* tvptr = (TValue*)ptr;
+      GCDecRf((void*)tvptr->x.c.payload);
     } else {
 // ToDo: when flag is not RECALL
       // ManageEnvironment(parentenv, flag);
@@ -1272,15 +1273,14 @@ void MemoryManager::ManageEnvironment(void *envptr, ManageType flag) {
   }
   ptr++;
   for (uint32 i = 1; i <= argnums; i++) {
-    void* val = (void*)(*ptr);
-    void *true_addr = (void*)((long)val & PAYLOAD_MASK);
+    TValue val = {.x.u64 = (*ptr)};
+    void *true_addr = (void*)(val.x.c.payload);
 
     if (flag == RECALL && IsHeap(true_addr)) {
       if (GetMemHeader(true_addr).memheadtag == MemHeadJSObj) {
         GCDecRf(true_addr);
       }
       else {
-        // assert(0);
         GCDecRf(true_addr);
       }
     }
@@ -1329,6 +1329,9 @@ void MemoryManager::ManageProp(__jsprop *prop, ManageType flag) {
     ManageChildObj(__get_get(desc), flag);
   }
   if (flag == SWEEP || flag == RECALL) {
+    if(prop->isIndex == false) {
+      GCDecRf(prop->n.name);
+    }
     RecallMem((void *)prop, sizeof(__jsprop));
   }
 }
@@ -1360,7 +1363,8 @@ void MemoryManager::ManageObject(__jsobject *obj, ManageType flag) {
         uint32 arrlen = (uint32_t)__jsval_to_number(array[0]);
         for (uint32_t i = 0; i < arrlen; i++) {
           TValue jsvalue = obj->shared.array_props[i + 1];
-          ManageJsvalue(jsvalue, flag);
+          if (IS_NEEDRC(jsvalue.x.u64))
+            ManageJsvalue(jsvalue, flag);
         }
         if (flag == SWEEP || flag == RECALL) {
           uint32_t size = (arrlen + 1) * sizeof(TValue);
@@ -1511,7 +1515,7 @@ int num_roots = 0;
 
   // Step 1: mark red transitive closure of root. All nodes in the closure are marked red.
   // In the process, whenever a node is visited its RC is decreased.
-#ifdef MM_DEBUG
+#ifdef DBG_CRC_LMS
   printf("In RecallCycle, num of candidates= %d\n", num_roots);
   printf("##### step 1: mark red all nodes in transitive closure\n");
 #endif
@@ -1531,7 +1535,7 @@ int num_roots = 0;
     root = root->next;
   }
 
-#ifdef MM_DEBUG
+#ifdef DBG_CRC_LMS
   // DumpClosures();
   printf("##### step 2: mark nodes blue or green\n");
 #endif
@@ -1579,7 +1583,7 @@ int num_roots = 0;
     root = next_root;
   }
 
-#ifdef MM_DEBUG
+#ifdef DBG_CRC_LMS
   printf("Num_garbage_cycles= %d\n", num_garbage_cycles);
 #endif
 

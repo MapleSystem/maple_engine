@@ -95,17 +95,11 @@ static inline bool __is_negative_zero(TValue data) {
 
 #if MACHINE64
 #define IsNeedRc(v) (((uint8_t)v & 0x4) == 4)
-/*
-static inline bool IsNeedRc(uint8_t flag) {
-  __jstype flagt = (__jstype)flag;
-  return flagt == JSTYPE_OBJECT || flagt == JSTYPE_STRING || flagt == JSTYPE_ENV;
-}
-*/
 static inline __jsstring *__jsval_to_string(TValue data) {
-  return (__jsstring *)GET_PAYLOAD(data);
+  return (__jsstring *)data.x.c.payload;
 }
 static inline __jsobject *__jsval_to_object(TValue data) {
-  return (__jsobject *)GET_PAYLOAD(data);
+  return (__jsobject *)data.x.c.payload;
 }
 static inline void __set_string(TValue &data, __jsstring *str) {
   data.x.u64 = (uint64_t)str | NAN_STRING;
@@ -114,10 +108,10 @@ static inline void __set_object(TValue &data, __jsobject *obj) {
   data.x.u64 = (uint64_t)obj | NAN_OBJECT;;
 }
 static inline bool __is_js_function(TValue data) {
-  return __is_js_object(data) && ((__jsobject*)GET_PAYLOAD(data))->object_class == JSFUNCTION;
+  return IS_OBJECT(data.x.u64) && ((__jsobject*)data.x.c.payload)->object_class == JSFUNCTION;
 }
 static inline bool __is_js_array(TValue data) {
-  return __is_js_object(data) && ((__jsobject*)GET_PAYLOAD(data))->object_class == JSARRAY;
+  return IS_OBJECT(data.x.u64) && ((__jsobject*)data.x.c.payload)->object_class == JSARRAY;
 }
 static inline double __jsval_to_double(TValue data) {
   if (IS_DOUBLE(data.x.u64) || IS_INFINITY(data.x.u64))

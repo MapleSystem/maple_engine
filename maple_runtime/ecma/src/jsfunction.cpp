@@ -140,7 +140,6 @@ TValue __jsfun_internal_call(__jsobject *f, TValue &this_arg, TValue *arg_list, 
        throw "callee exception";
      }
      ret = gInterSource->retVal0;
-     //mDecode(ret);
      return ret;
   }
 

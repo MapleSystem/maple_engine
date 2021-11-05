@@ -136,6 +136,12 @@ TValue __jsop_add(TValue &x, TValue &y) {
     TValue ret = __string_value(__jsstr_concat_2(lstr, rstr));
     if (!isLstr)
       memory_manager->RecallString(lstr);
+    else {
+      if (!__is_string(x)) { // if lstr is created from a non-string value x, it must be released.
+        memory_manager->RecallString(lstr);
+      }
+    }
+
     if (!isRstr)
       memory_manager->RecallString(rstr);
     else {

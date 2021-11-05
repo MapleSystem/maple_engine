@@ -54,7 +54,6 @@ __jsobject *__js_new_arr_elems(TValue &items, uint32_t length) {
   for (uint32_t i = 0; i < length; i++) {
     TValue  itVt;
     itVt.x.u64 =  *((uint64_t *)GET_PAYLOAD(items) + i);
-    //mDecode(itVt);
     __set_regular_elem(array_elems, i, itVt);
   }
   return arr;
@@ -98,29 +97,28 @@ static uint32_t __js_arrlengthproperty_internal(TValue len) {
 // ecma 15.4.2.2
 __jsobject *__js_new_arr_length(TValue len) {
   uint32_t length;
-  bool rangeerror = false;
-  // check length is number/double, check the range
-  if (__is_number(len) || __is_double(len)) {
-    int32_t numlen = __js_ToNumber(len);
-    length = __js_ToUint32(len);
-    if ((numlen < 0 && __is_number(len)) || (__is_double(len) && (length != __jsval_to_double(len)))) {
-      rangeerror = true;
-    }
+  if (IS_NUMBER(len.x.u64) && len.x.i32 > 0){
+    length = len.x.i32;
   } else {
-    // not number, set length to 1
-    length = 1;
-  }
-  // if the argument len is a Number and ToUint32(len) is not equal to len
-  if (rangeerror || __is_undefined(len) || __is_infinity(len) ||
-      __is_neg_infinity(len) || __is_nan(len)) {
-    MAPLE_JS_RANGEERROR_EXCEPTION();
+    bool rangeerror = false;
+    // check length is number/double, check the range
+    if (__is_number(len) || __is_double(len)) {
+      int32_t numlen = __js_ToNumber(len);
+      length = __js_ToUint32(len);
+      if ((numlen < 0 && __is_number(len)) || (__is_double(len) && (length != __jsval_to_double(len)))) {
+        rangeerror = true;
+      }
+    } else {
+      // not number, set length to 1
+      length = 1;
+    }
+    // if the argument len is a Number and ToUint32(len) is not equal to len
+    if (rangeerror || __is_undefined(len) || __is_infinity(len) ||
+        __is_neg_infinity(len) || __is_nan(len)) {
+      MAPLE_JS_RANGEERROR_EXCEPTION();
+    }
   }
   __jsobject *arr = __js_new_arr_internal(length);
-  TValue *elems = &arr->shared.array_props[1];
-  uint32_t allocated_length = length > ARRAY_MAXINDEXNUM_INTERNAL ? ARRAY_MAXINDEXNUM_INTERNAL : length;
-  for (uint32_t i = 0; i < allocated_length; i++) {
-    elems[i] = __none_value();
-  }
   return arr;
 }
 
@@ -399,25 +397,34 @@ TValue __jsarr_pt_push(TValue &this_array, TValue *items, uint32_t size) {
 // Helper for __jsarr_pt_reverse and __jsarr_pt_sort
 void __jsarr_helper_ExchangeElem(__jsobject *arr, uint32_t idx1, uint32_t idx2) {
   TValue elem1, elem2;
-  bool exist1 = __jsobj_helper_HasPropertyAndGet(arr, idx1, &elem1);
-  bool exist2 = __jsobj_helper_HasPropertyAndGet(arr, idx2, &elem2);
+  const bool exist1 = __jsobj_helper_HasPropertyAndGet(arr, idx1, &elem1);
+  const bool exist2 = __jsobj_helper_HasPropertyAndGet(arr, idx2, &elem2);
+
   if (exist2) {
     if (exist1) {
-      // Inc RF for elem1 otherwise it will goes down to 0 and get released
+      // arr[idx1] is being overwritten, which will dec RC(elem1); increase the RC to prevent premature release
       GCCheckAndIncRf(GET_PAYLOAD(elem1), IS_NEEDRC(elem1.x.u64));
     }
-    __jsobj_internal_Put(arr, idx1, elem2, true);
+    __jsobj_internal_Put(arr, idx1, elem2, true); // this will dec RC(elem1) if exist1=true.
   } else {
     __jsobj_internal_Delete(arr, idx1);
   }
+
   if (exist1) {
+#if 0 // No need to do ++RC(elem2), because if (exist1 && exist2), then at this point RC(elem2) >= 2
     if (exist2) {
-      // Inc RF for elem1 otherwise it will goes down to 0 and get released
+      // arr[idx2] is being overwritten, which will dec RC(elem2); increase the RC to prevent premature release
       GCCheckAndIncRf(GET_PAYLOAD(elem2), IS_NEEDRC((elem2.x.u64)));
     }
+#endif
     __jsobj_internal_Put(arr, idx2, elem1, true);
   } else {
     __jsobj_internal_Delete(arr, idx2);
+  }
+
+  if (exist1 && exist2) { // RC increment was done to prevent premature release; now undo the increment.
+    GCCheckAndDecRf(GET_PAYLOAD(elem1), IS_NEEDRC(elem1.x.u64));
+    // GCCheckAndDecRf(GET_PAYLOAD(elem2), IS_NEEDRC((elem2.x.u64))); // see above for why tmp inc and dec of RC(elem2) is not necessary.
   }
 }
 

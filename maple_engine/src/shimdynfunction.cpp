@@ -1804,12 +1804,9 @@ TValue InterSource::IntrinCall(MIRIntrinsicID id, TValue *args, int numArgs) {
 
 TValue InterSource::NativeFuncCall(MIRIntrinsicID id, TValue *args, int numArgs) {
   int argNum = numArgs - 2;
-  TValue funcNode = args[0];
-  TValue thisNode = args[1];
-  TValue jsArgs[MAXCALLARGNUM];
-  for (int i = 0; i < argNum; i++) {
-    jsArgs[i] = (args[2 + i]);
-  }
+  TValue &funcNode = args[0];
+  TValue &thisNode = args[1];
+  TValue *jsArgs = &args[2];
   // for __jsobj_defineProperty to arguments built-in, it will affects the actual parameters
   DynMFunction *curFunc = GetCurFunc();
   if (!curFunc->is_strict() && id != INTRN_JSOP_NEW && argNum == 3 && __js_IsCallable(funcNode)) {
@@ -2066,6 +2063,18 @@ TValue InterSource::JSopRequire(TValue &mv0) {
   maple_invoke_dynamic_method(header, NULL);
   SetCurFunc(oldDynFunc);
   RestorePluginContext(formalJsFileInfo);
+
+  // RC-- for local vars
+  uint8 *spaddr = (uint8 *)GetSPAddr();
+  uint8 *addr = spaddr - header->frameSize;
+  while(addr < spaddr) {
+    TValue* local = (TValue*)addr;
+    if (IS_NEEDRC(local->x.u64)) {
+      memory_manager->GCDecRf((void*)local->x.c.payload);
+    }
+    addr += sizeof(void*);
+  }
+
   // SetCurrFunc();
   // restore
   return retVal0;
