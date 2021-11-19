@@ -477,6 +477,8 @@ TValue __jsstr_concat(TValue &this_string, TValue *arr, uint32_t size) {
       __jschar c = __jsstr_get_char(s[i], j);
       __jsstr_set_char(str, len++, c);
     }
+    if (i != 0)
+      memory_manager->RecallString(s[i]);
   }
   return __string_value(str);
 }
@@ -813,7 +815,9 @@ TValue __jsstr_split(TValue &this_string, TValue &separator, TValue &limit) {
         // step 13.c.iii.2
         __set_number(nv, (int32_t)n);
         v = __string_value(t);
-        __jsobj_helper_add_value_property(a, __js_ToString(nv), v, JSPROP_DESC_HAS_VWEC);
+        __jsstring* nv_str = __js_ToString(nv);
+        __jsobj_helper_add_value_property(a, nv_str, v, JSPROP_DESC_HAS_VWEC);
+        memory_manager->RecallString(nv_str);
         // step 13.c.iii.3
         __jsobj_helper_set_length(a, ++n, true);
         // step 13.c.iii.4
@@ -838,7 +842,9 @@ TValue __jsstr_split(TValue &this_string, TValue &separator, TValue &limit) {
     __set_number(nv, (int32_t)n);
     // step 15:
     v = __string_value(t);
-    __jsobj_helper_add_value_property(a, __js_ToString(nv), v, JSPROP_DESC_HAS_VWEC);
+    __jsstring* nvStr = __js_ToString(nv);
+    __jsobj_helper_add_value_property(a, nvStr, v, JSPROP_DESC_HAS_VWEC);
+    memory_manager->RecallString(nvStr);
     __jsobj_helper_set_length(a, ++n, true);
   }
   // step 16:

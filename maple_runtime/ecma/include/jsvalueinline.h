@@ -77,7 +77,7 @@ static inline bool __is_primitive(TValue data) {
          IS_NAN(data.x.u64) || IS_UNDEFINED(data.x.u64) || IS_NULL(data.x.u64) || IS_INFINITY(data.x.u64);
 }
 
-static inline bool __is_js_object(TValue data) {
+static inline bool __is_js_object(TValue& data) {
   return IS_OBJECT(data.x.u64);
 }
 
@@ -95,7 +95,7 @@ static inline bool __is_negative_zero(TValue data) {
 
 #if MACHINE64
 #define IsNeedRc(v) (((uint8_t)v & 0x4) == 4)
-static inline __jsstring *__jsval_to_string(TValue data) {
+static inline __jsstring *__jsval_to_string(TValue& data) {
   return (__jsstring *)data.x.c.payload;
 }
 static inline __jsobject *__jsval_to_object(TValue data) {

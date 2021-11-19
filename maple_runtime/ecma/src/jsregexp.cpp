@@ -66,6 +66,8 @@ __jsobject *__js_ToRegExp(__jsstring *jsstr) {
   TValue js_i = __jsstr_indexOf(str, search, pos);
   TValue end = __number_value(len);
   TValue js_j = __jsstr_lastIndexOf(str, search, pos);
+  // search is not used anymore, release memory.
+  memory_manager->RecallString(__jsval_to_string(search));
   int i = __js_ToNumber(js_i);
   TValue start = __number_value(i+1);
   TValue pattern_val = __jsstr_substring(str, start, js_j);
@@ -96,6 +98,8 @@ __jsobject *__js_ToRegExp(__jsstring *jsstr) {
 
   // Set flag options.
   CheckAndSetFlagOptions(js_flags, js_pattern, global, ignorecase, multiline);
+  // js_flags not used anymore; release memory.
+  memory_manager->RecallString(js_flags);
 
   // ES5 15.10.7.2 Init 'global' property.
   TValue js_global = __boolean_value(global);

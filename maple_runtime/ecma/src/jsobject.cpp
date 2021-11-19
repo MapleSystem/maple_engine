@@ -464,10 +464,21 @@ __jsprop *__add_builtin_value_property(__jsbuiltin_string_id id, __jsbuiltin_obj
   uint32_t attrs;
   switch(builtin_obj_id) {
       case JSBUILTIN_DATECONSTRUCTOR:
-          attrs = JSPROP_DESC_HAS_VWUEC;
-          break;
+      case JSBUILTIN_STRINGCONSTRUCTOR:
+      case JSBUILTIN_FUNCTIONCONSTRUCTOR:
+      case JSBUILTIN_REGEXPCONSTRUCTOR:
+      case JSBUILTIN_ERROR_CONSTRUCTOR:
+      case JSBUILTIN_RANGEERROR_CONSTRUCTOR:
       case JSBUILTIN_OBJECTCONSTRUCTOR:
-          attrs = JSPROP_DESC_HAS_VUWUEC;
+      case JSBUILTIN_ARRAYCONSTRUCTOR:
+      case JSBUILTIN_URIERROR_CONSTRUCTOR:
+      case JSBUILTIN_SYNTAXERROR_CONSTRUCTOR:
+      case JSBUILTIN_EVAL_CONSTRUCTOR:
+      case JSBUILTIN_BOOLEANCONSTRUCTOR:
+      case JSBUILTIN_TYPEERROR_CONSTRUCTOR:
+      case JSBUILTIN_NUMBERCONSTRUCTOR:
+      case JSBUILTIN_REFERENCEERRORCONSTRUCTOR:
+          attrs = JSPROP_DESC_HAS_VWUEC;
           break;
       case JSBUILTIN_REGEXPPROTOTYPE:
           attrs = id != JSBUILTIN_STRING_PROTOTYPE ? JSPROP_DESC_HAS_VUWUEC : JSPROP_DESC_HAS_VUWUEUC;
@@ -1362,6 +1373,7 @@ TValue __jsobj_internal_Get(__jsobject *obj, TValue &p) {
       }
     }
   }
+#if 0
   __jsstring *name = __js_ToString(p);
   bool isNum;
   uint32 idxNum = __jsstr_is_numidx(name, isNum);
@@ -1370,6 +1382,29 @@ TValue __jsobj_internal_Get(__jsobject *obj, TValue &p) {
       memory_manager->RecallString(name);
     return __jsobj_internal_GetByValue(obj, idxNum);
   } else {
+    if (!__is_string(p)) {
+      GCIncRf(name);
+    }
+    TValue v = __jsobj_internal_Get(obj, name);
+    if (!__is_string(p)) {
+      GCDecRf(name);
+    }
+    return v;
+  }
+#endif
+  if (__is_number(p)) {
+    uint32 idxNum = __jsval_to_number(p);
+    return __jsobj_internal_GetByValue(obj, idxNum);
+  } else {
+    __jsstring *name = __js_ToString(p);
+    bool isNum = false;
+    uint32 idxNum = __jsstr_is_numidx(name, isNum);
+    if (isNum) {
+      if (__is_string(p) == false) // if p is a string, name is the same string wrapped by p, and we should not release name.
+        memory_manager->RecallString(name);
+      return __jsobj_internal_GetByValue(obj, idxNum);
+    }
+
     if (!__is_string(p)) {
       GCIncRf(name);
     }
@@ -3126,7 +3161,11 @@ TValue __jserror_pt_toString_base(TValue &this_object, __jsbuiltin_string_id id)
   if (isMsgEmpty) {
     return name;
   }
-  return __string_value(__jsstr_concat_3(nameStr, __jsstr_new_from_char(": "), msgStr));
+  __jsstring* sepStr = __jsstr_new_from_char(": ");
+  TValue tv = __string_value(__jsstr_concat_3(nameStr, sepStr, msgStr));
+  memory_manager->RecallString(sepStr);
+  // ToDo: recall nameStr and msgStr as well?
+  return tv;
 }
 
 

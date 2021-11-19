@@ -493,6 +493,7 @@ void MemoryManager::AppMemLeakCheck() {
   RecallCycle();
   RecallRoots(cycle_roots);
 
+  printf("\nAfter CRC, #live objects: %lu\n", live_objects.size());
 #else
   MarkAndSweep();
 #endif
@@ -969,7 +970,7 @@ void MemoryManager::GCDecRf(void *addr) {
   }
 
   // RC != 0 after decrease; if it's jsobject, then possible root of cycle
-  if (header.refcount == 1 && GetMemHeader(addr).memheadtag == MemHeadJSObj && GetMemHeader(addr).in_roots == false) {
+  if (GetMemHeader(addr).memheadtag == MemHeadJSObj && GetMemHeader(addr).in_roots == false) {
     GetMemHeader(addr).in_roots = true;
     crc_candidate_roots.insert(addr);
   }
@@ -1251,11 +1252,6 @@ void MemoryManager::ManageEnvironment(void *envptr, ManageType flag) {
     return;
   }
 
-  if (flag != RECALL) {
-// ToDo: if flag is not RECALL
-    return;
-  }
-
 #ifdef MACHINE64
   //assert(false && "NYI");
   uint64* ptr = (uint64*)envptr;
@@ -1276,12 +1272,19 @@ void MemoryManager::ManageEnvironment(void *envptr, ManageType flag) {
     TValue val = {.x.u64 = (*ptr)};
     void *true_addr = (void*)(val.x.c.payload);
 
-    if (flag == RECALL && IsHeap(true_addr)) {
-      if (GetMemHeader(true_addr).memheadtag == MemHeadJSObj) {
-        GCDecRf(true_addr);
+    if (flag == RECALL) {
+      if(IsHeap(true_addr)) {
+        if (GetMemHeader(true_addr).memheadtag == MemHeadJSObj) {
+          GCDecRf(true_addr);
+        }
+        else {
+          GCDecRf(true_addr);
+        }
       }
-      else {
-        GCDecRf(true_addr);
+    }
+    else {
+      if(__is_js_object(val)) {
+        ManageChildObj((__jsobject*)true_addr, flag);
       }
     }
     ptr++;

@@ -282,7 +282,11 @@ TValue __jsintl_CollatorSupportedLocalesOf(TValue &collator,
 TValue CompareStrings(TValue &collator, TValue &x, TValue &y) {
   TValue p = StrToVal("sensitivity");
   TValue v = __jsop_getprop(collator, p);
-  std::string sensitivity = ValToStr(v);
+  std::string sensitivity;
+  if (!__is_undefined(v) && __is_string(v))
+    sensitivity = ValToStr(v);
+  else
+    sensitivity = "variant"; // default one if missing.
 
   UColAttributeValue strength = UCOL_DEFAULT;
   UColAttributeValue case_level = UCOL_OFF;
@@ -306,7 +310,11 @@ TValue CompareStrings(TValue &collator, TValue &x, TValue &y) {
 
   p = StrToVal("locale");
   v = __jsop_getprop(collator, p);
-  std::string locale_str = ValToStr(v);
+  std::string locale_str;
+  if (!__is_undefined(v) && __is_string(v))
+    locale_str = ValToStr(v);
+  else
+    locale_str = "en_US"; // default one if missing.
 
   UErrorCode status = U_ZERO_ERROR;
   UCollator *col = ucol_open(locale_str.c_str(), &status);
