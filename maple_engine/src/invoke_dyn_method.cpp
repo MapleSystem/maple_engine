@@ -107,42 +107,42 @@ static void PrintUncaughtException(__jsstring *msg) {
 
 #define ABS(v) ((((v) < 0) ? -(v) : (v)))
 
-#define MPUSH_SELF(v)   {++func.sp;}
+#define MPUSH_SELF(v)   {++func_sp;}
 
-#define MPUSHV(v)  (func.operand_stack[++func.sp].x.u64 = (v))
-#define MPUSH(v)   (func.operand_stack[++func.sp] = v)
-#define MPOP()     (func.operand_stack[func.sp--])
-#define MTOP()     (func.operand_stack[func.sp])
+#define MPUSHV(v)  (func_operand_stack[++func_sp].x.u64 = (v))
+#define MPUSH(v)   (func_operand_stack[++func_sp] = v)
+#define MPOP()     (func_operand_stack[func_sp--])
+#define MTOP()     (func_operand_stack[func_sp])
 
 #define MARGS(x)   (caller->operand_stack[caller_args + x])
-#define RETURNVAL  (func.operand_stack[0])
-#define THROWVAL   (func.operand_stack[1])
-#define MLOCALS(x) (func.operand_stack[x])
+#define RETURNVAL  (func_operand_stack[0])
+#define THROWVAL   (func_operand_stack[1])
+#define MLOCALS(x) (func_operand_stack[x])
 
 #define FAST_COMPARE(op) {\
   if ((IS_NUMBER_OR_BOOL(mVal0.x.u64)) && (IS_NUMBER_OR_BOOL(mVal1.x.u64))) {\
       mVal0.x.u64 = (mVal0.x.i32 op mVal1.x.i32) | NAN_BOOLEAN ;\
       MPUSH_SELF(mVal0);\
-      func.pc += sizeof(mre_instr_t);\
-      goto *(labels[*func.pc]);\
+      func_pc += sizeof(mre_instr_t);\
+      goto *(labels[*func_pc]);\
   } else if (IS_DOUBLE(mVal0.x.u64)) {\
     if (IS_DOUBLE(mVal1.x.u64)) {\
       mVal0.x.u64 = (mVal0.x.f64 op mVal1.x.f64) | NAN_BOOLEAN;\
       MPUSH_SELF(mVal0);\
-      func.pc += sizeof(mre_instr_t);\
-      goto *(labels[*func.pc]);\
+      func_pc += sizeof(mre_instr_t);\
+      goto *(labels[*func_pc]);\
     } else if (IS_NUMBER_OR_BOOL(mVal1.x.u64)) {\
       mVal0.x.u64 = (mVal0.x.f64 op (double)mVal1.x.i32) | NAN_BOOLEAN;\
       MPUSH_SELF(mVal0);\
-      func.pc += sizeof(mre_instr_t);\
-      goto *(labels[*func.pc]);\
+      func_pc += sizeof(mre_instr_t);\
+      goto *(labels[*func_pc]);\
     }\
   } else if (IS_DOUBLE(mVal1.x.u64)) {\
     if (IS_NUMBER_OR_BOOL(mVal0.x.u64)) {\
       mVal0.x.u64 = ((double)mVal0.x.i32 op mVal1.x.f64) | NAN_BOOLEAN;\
       MPUSH_SELF(mVal0);\
-      func.pc += sizeof(mre_instr_t);\
-      goto *(labels[*func.pc]);\
+      func_pc += sizeof(mre_instr_t);\
+      goto *(labels[*func_pc]);\
     }\
   }\
 }
@@ -156,22 +156,27 @@ static void PrintUncaughtException(__jsstring *msg) {
       } else\
         op0.x.i32 = r;\
       MPUSH_SELF(op0);\
-      func.pc += sizeof(binary_node_t);\
-      goto *(labels[*func.pc]);\
+      func_pc += sizeof(binary_node_t);\
+      goto *(labels[*func_pc]);\
     } else if (IS_DOUBLE(op0.x.u64)) {\
       double r;\
       r = op0.x.f64 op (double)op1.x.i32;\
       if (r == 0) {\
         op0.x.u64 = POS_ZERO;\
         MPUSH_SELF(op0);\
-        func.pc += sizeof(binary_node_t);\
-        goto *(labels[*func.pc]);\
+        func_pc += sizeof(binary_node_t);\
+        goto *(labels[*func_pc]);\
       } else if (ABS(r) <= NumberMaxValue) {\
         op0.x.f64 = r;\
         MPUSH_SELF(op0);\
-        func.pc += sizeof(binary_node_t);\
-        goto *(labels[*func.pc]);\
+        func_pc += sizeof(binary_node_t);\
+        goto *(labels[*func_pc]);\
       }\
+    } else if (IS_ADDRBASE(op0.x.u64)) {\
+      op0.x.u64 = op0.x.u64 op (int64_t)op1.x.i32;\
+      MPUSH_SELF(op0);\
+      func_pc += sizeof(binary_node_t);\
+      goto *(labels[*func_pc]);\
     }\
   } else if (IS_DOUBLE(op1.x.u64)) {\
     double r;\
@@ -180,26 +185,26 @@ static void PrintUncaughtException(__jsstring *msg) {
       if (r == 0) {\
         op0.x.u64 = POS_ZERO;\
         MPUSH_SELF(op0);\
-        func.pc += sizeof(binary_node_t);\
-        goto *(labels[*func.pc]);\
+        func_pc += sizeof(binary_node_t);\
+        goto *(labels[*func_pc]);\
      } else if (ABS(r) <= NumberMaxValue) {\
         op0.x.f64 = r;\
         MPUSH_SELF(op0);\
-        func.pc += sizeof(binary_node_t);\
-        goto *(labels[*func.pc]);\
+        func_pc += sizeof(binary_node_t);\
+        goto *(labels[*func_pc]);\
       }\
     } else if (IS_NUMBER(op0.x.u64)) {\
       r = (double)op0.x.i32 op op1.x.f64;\
       if (r == 0) {\
         op0.x.u64 = POS_ZERO;\
         MPUSH_SELF(op0);\
-        func.pc += sizeof(binary_node_t);\
-        goto *(labels[*func.pc]);\
+        func_pc += sizeof(binary_node_t);\
+        goto *(labels[*func_pc]);\
       } else if (ABS(r) <= NumberMaxValue) {\
         op0.x.f64 = r;\
         MPUSH_SELF(op0);\
-        func.pc += sizeof(binary_node_t);\
-        goto *(labels[*func.pc]);\
+        func_pc += sizeof(binary_node_t);\
+        goto *(labels[*func_pc]);\
       }\
     }\
   }\
@@ -214,21 +219,21 @@ static void PrintUncaughtException(__jsstring *msg) {
       } else\
         op0.x.i32 = r;\
       MPUSH_SELF(op0);\
-      func.pc += sizeof(binary_node_t);\
-      goto *(labels[*func.pc]);\
+      func_pc += sizeof(binary_node_t);\
+      goto *(labels[*func_pc]);\
     } else if (IS_DOUBLE(op0.x.u64)) {\
       double r;\
       r = op0.x.f64 op (double)op1.x.i32;\
       if (r == 0) { \
         op0.x.u64 = ((op0.x.f64 > 0 && op1.x.i32 >= 0) || (op0.x.f64 <= 0 && op1.x.i32 < 0)) ?  POS_ZERO : NEG_ZERO;\
         MPUSH_SELF(op0);\
-        func.pc += sizeof(binary_node_t);\
-        goto *(labels[*func.pc]);\
+        func_pc += sizeof(binary_node_t);\
+        goto *(labels[*func_pc]);\
       } else if (ABS(r) <= NumberMaxValue) {\
         op0.x.f64 = r;\
         MPUSH_SELF(op0);\
-        func.pc += sizeof(binary_node_t);\
-        goto *(labels[*func.pc]);\
+        func_pc += sizeof(binary_node_t);\
+        goto *(labels[*func_pc]);\
       }\
     }\
   } else if (IS_DOUBLE(op1.x.u64)) {\
@@ -238,26 +243,26 @@ static void PrintUncaughtException(__jsstring *msg) {
       if (r == 0) { \
         op0.x.u64 = ((op0.x.f64 > 0 && op1.x.f64 > 0) || (op0.x.f64 <= 0 && op1.x.f64 <= 0)) ?  POS_ZERO : NEG_ZERO;\
         MPUSH_SELF(op0);\
-        func.pc += sizeof(binary_node_t);\
-        goto *(labels[*func.pc]);\
+        func_pc += sizeof(binary_node_t);\
+        goto *(labels[*func_pc]);\
      } else if (ABS(r) <= NumberMaxValue) {\
         op0.x.f64 = r;\
         MPUSH_SELF(op0);\
-        func.pc += sizeof(binary_node_t);\
-        goto *(labels[*func.pc]);\
+        func_pc += sizeof(binary_node_t);\
+        goto *(labels[*func_pc]);\
       }\
     } else if (IS_NUMBER(op0.x.u64)) {\
       r = (double)op0.x.i32 op op1.x.f64;\
       if (r == 0) { \
         op0.x.u64 = ((op0.x.i32 >= 0 && op1.x.f64 > 0) || (op0.x.i32 < 0 && op1.x.f64 < 0)) ?  POS_ZERO : NEG_ZERO;\
         MPUSH_SELF(op0);\
-        func.pc += sizeof(binary_node_t);\
-        goto *(labels[*func.pc]);\
+        func_pc += sizeof(binary_node_t);\
+        goto *(labels[*func_pc]);\
       } else if (ABS(r) <= NumberMaxValue) {\
         op0.x.f64 = r;\
         MPUSH_SELF(op0);\
-        func.pc += sizeof(binary_node_t);\
-        goto *(labels[*func.pc]);\
+        func_pc += sizeof(binary_node_t);\
+        goto *(labels[*func_pc]);\
       }\
     }\
   }\
@@ -271,21 +276,21 @@ static void PrintUncaughtException(__jsstring *msg) {
       else \
         op0.x.f64 = (double)op0.x.i32 / (double)op1.x.i32;\
       MPUSH_SELF(op0);\
-      func.pc += sizeof(binary_node_t);\
-      goto *(labels[*func.pc]);\
+      func_pc += sizeof(binary_node_t);\
+      goto *(labels[*func_pc]);\
     } else if (IS_DOUBLE(op0.x.u64)) {\
       double r;\
       r = op0.x.f64 / (double)op1.x.i32;\
       if (r == 0) { \
         op0.x.u64 = ((op0.x.f64 > 0 && op1.x.i32 >= 0) || (op0.x.f64 <= 0 && op1.x.i32 < 0)) ?  POS_ZERO : NEG_ZERO;\
         MPUSH_SELF(op0);\
-        func.pc += sizeof(binary_node_t);\
-        goto *(labels[*func.pc]);\
+        func_pc += sizeof(binary_node_t);\
+        goto *(labels[*func_pc]);\
       } else if (ABS(r) <= NumberMaxValue) {\
         op0.x.f64 = r;\
         MPUSH_SELF(op0);\
-        func.pc += sizeof(binary_node_t);\
-        goto *(labels[*func.pc]);\
+        func_pc += sizeof(binary_node_t);\
+        goto *(labels[*func_pc]);\
       }\
     }\
   } else if (IS_DOUBLE(op1.x.u64) && op1.x.f64 != 0) {\
@@ -295,26 +300,26 @@ static void PrintUncaughtException(__jsstring *msg) {
       if (r == 0) { \
         op0.x.u64 = ((op0.x.f64 > 0 && op1.x.f64 > 0) || (op0.x.f64 <= 0 && op1.x.f64 <= 0)) ?  POS_ZERO : NEG_ZERO;\
         MPUSH_SELF(op0);\
-        func.pc += sizeof(binary_node_t);\
-        goto *(labels[*func.pc]);\
+        func_pc += sizeof(binary_node_t);\
+        goto *(labels[*func_pc]);\
       } else if (ABS(r) <= NumberMaxValue) {\
         op0.x.f64 = r;\
         MPUSH_SELF(op0);\
-        func.pc += sizeof(binary_node_t);\
-        goto *(labels[*func.pc]);\
+        func_pc += sizeof(binary_node_t);\
+        goto *(labels[*func_pc]);\
       }\
     } else if IS_NUMBER(op0.x.u64) {\
       r = (double)op0.x.i32 / op1.x.f64;\
       if (r == 0) { \
         op0.x.u64 = ((op0.x.i32 >= 0 && op1.x.f64 > 0) || (op0.x.i32 < 0 && op1.x.f64 < 0)) ?  POS_ZERO : NEG_ZERO;\
         MPUSH_SELF(op0);\
-        func.pc += sizeof(binary_node_t);\
-        goto *(labels[*func.pc]);\
+        func_pc += sizeof(binary_node_t);\
+        goto *(labels[*func_pc]);\
       } else if (ABS(r) <= NumberMaxValue) {\
         op0.x.f64 = r;\
         MPUSH_SELF(op0);\
-        func.pc += sizeof(binary_node_t);\
-        goto *(labels[*func.pc]);\
+        func_pc += sizeof(binary_node_t);\
+        goto *(labels[*func_pc]);\
       }\
     }\
   }\
@@ -328,7 +333,7 @@ static void PrintUncaughtException(__jsstring *msg) {
        gInterSource->currEH->UpdateState(OP_throw);\
        void *newPc = gInterSource->currEH->GetEHpc(&func);\
        if (newPc) {\
-         func.pc = (uint8_t *)newPc;\
+         func_pc = (uint8_t *)newPc;\
          goto *(labels[*(uint8_t *)newPc]);\
        } else {\
          gInterSource->InsertEplog();\
@@ -377,11 +382,11 @@ static void PrintUncaughtException(__jsstring *msg) {
     } \
     if (!isEhHappend) { \
       MPUSH(res); \
-      func.pc += sizeof(instrt); \
-      goto *(labels[*func.pc]); \
+      func_pc += sizeof(instrt); \
+      goto *(labels[*func_pc]); \
     } else { \
       if (newPc) { \
-        func.pc = (uint8_t *)newPc; \
+        func_pc = (uint8_t *)newPc; \
         goto *(labels[*(uint8_t *)newPc]); \
       } else { \
         gInterSource->InsertEplog(); \
@@ -430,11 +435,11 @@ static void PrintUncaughtException(__jsstring *msg) {
     } \
     if (!isEhHappend) { \
       MPUSH(res); \
-      func.pc += sizeof(binary_node_t); \
-      goto *(labels[*func.pc]); \
+      func_pc += sizeof(binary_node_t); \
+      goto *(labels[*func_pc]); \
     } else { \
       if (newPc) { \
-        func.pc = (uint8_t *)newPc; \
+        func_pc = (uint8_t *)newPc; \
         goto *(labels[*(uint8_t *)newPc]); \
       } else { \
         gInterSource->InsertEplog(); \
@@ -457,10 +462,10 @@ extern "C" uint32_t __inc_opcode_cnt_dyn() {
   if(debug_engine && (debug_engine & (kEngineDebugInstruction | kEngineDebuggerOn))) {\
     __inc_opcode_cnt_dyn(); \
     if(debug_engine & kEngineDebugInstruction) {\
-      TValue v = func.operand_stack[func.sp]; \
+      TValue v = func.operand_stack[func_sp]; \
       fprintf(stderr, "Debug [%ld] 0x%lx:%04lx: 0x%016lx, %s, sp=%-2ld: op=0x%02x, ptyp=0x%02x, op#=%3d,      OP_" \
-        #opc ", " #msg ", %d\n", gettid(), (uint8_t*)func.header - func.lib_addr, func.pc - (uint8_t*)func.header - func.header->header_size, \
-        GET_PAYLOAD(v), flagStr(__jsval_typeof(v)), func.sp - func.header->frameSize/8, *func.pc, *(func.pc+1), *(func.pc+3), __opcode_cnt_dyn);\
+        #opc ", " #msg ", %d\n", gettid(), (uint8_t*)func.header - func.lib_addr, func_pc - (uint8_t*)func.header - func.header->header_size, \
+        GET_PAYLOAD(v), flagStr(__jsval_typeof(v)), func_sp - func.header->frameSize/8, *func_pc, *(func_pc+1), *(func_pc+3), __opcode_cnt_dyn);\
     }\
   }
 
@@ -468,10 +473,10 @@ extern "C" uint32_t __inc_opcode_cnt_dyn() {
   if(debug_engine && (debug_engine & (kEngineDebugInstruction | kEngineDebuggerOn))) {\
     __inc_opcode_cnt_dyn(); \
     if(debug_engine & kEngineDebugInstruction) {\
-      TValue v = func.operand_stack[func.sp];\
+      TValue v = func.operand_stack[func_sp];\
       fprintf(stderr, "Debug [%ld] 0x%lx:%04lx: 0x%016lx, %s, sp=%-2ld: op=0x%02x, ptyp=0x%02x, param=0x%04x, OP_" \
-        #opc ", " #msg ", %d\n", gettid(), (uint8_t*)func.header - func.lib_addr, func.pc - (uint8_t*)func.header - func.header->header_size, \
-        GET_PAYLOAD(v), flagStr(__jsval_typeof(v)), func.sp - func.header->frameSize/8, *func.pc, *(func.pc+1), *((uint16_t*)(func.pc+2)), __opcode_cnt_dyn); \
+        #opc ", " #msg ", %d\n", gettid(), (uint8_t*)func.header - func.lib_addr, func_pc - (uint8_t*)func.header - func.header->header_size, \
+        GET_PAYLOAD(v), flagStr(__jsval_typeof(v)), func_sp - func.header->frameSize/8, *func_pc, *(func_pc+1), *((uint16_t*)(func_pc+2)), __opcode_cnt_dyn); \
     }\
   }
 
@@ -479,10 +484,10 @@ extern "C" uint32_t __inc_opcode_cnt_dyn() {
   if(debug_engine && (debug_engine & (kEngineDebugInstruction | kEngineDebuggerOn))) {\
     __inc_opcode_cnt_dyn(); \
     if(debug_engine & kEngineDebugInstruction) {\
-      TValue v = func.operand_stack[func.sp];\
+      TValue v = func.operand_stack[func_sp];\
       fprintf(stderr, "Debug [%ld] 0x%lx:%04lx: 0x%016lx, %s, sp=%-2ld: op=0x%02x, ptyp=0x%02x, param=0x%04x, OP_" \
-        #opc ", " #msg ", %d\n", gettid(), (uint8_t*)func.header - func.lib_addr, func.pc - (uint8_t*)func.header - func.header->header_size, \
-        GET_PAYLOAD(v), flagStr(__jsval_typeof(v)), func.sp - func.header->frameSize/8, *func.pc, *(func.pc+1), *((uint16_t*)(func.pc+2)), \
+        #opc ", " #msg ", %d\n", gettid(), (uint8_t*)func.header - func.lib_addr, func_pc - (uint8_t*)func.header - func.header->header_size, \
+        GET_PAYLOAD(v), flagStr(__jsval_typeof(v)), func_sp - func.header->frameSize/8, *func_pc, *(func_pc+1), *((uint16_t*)(func_pc+2)), \
         __opcode_cnt_dyn); \
     }\
   }
@@ -517,13 +522,13 @@ uint64_t prop_cache_gen = 1;
 #define FUSE_REGREAD(r) \
       if (!isEhHappend) { \
         /* fuse next OP_regread regRetval0 to reduce Retval0 overwrites */\
-        mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func.pc + sizeof(mre_instr_t))); \
+        mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func_pc + sizeof(mre_instr_t))); \
         if (expr.op == RE_regread && (int32_t)expr.param.frameIdx == -kSregRetval0) { \
-          func.pc += sizeof(mre_instr_t); \
+          func_pc += sizeof(mre_instr_t); \
           /* fuse next OP_iassignfpoff */ \
-          mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func.pc + sizeof(mre_instr_t))); \
+          mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func_pc + sizeof(mre_instr_t))); \
           if (stmt.op == RE_iassignfpoff) { \
-            func.pc += sizeof(mre_instr_t); \
+            func_pc += sizeof(mre_instr_t); \
             CHECKREFERENCEMVALUE(r); \
             int32_t offset = (int32_t)stmt.param.offset; \
             uint8 *addr = frame_pointer + offset; \
@@ -538,25 +543,25 @@ uint64_t prop_cache_gen = 1;
             if (!is_strict && offset > 0 && DynMFunction::is_jsargument(func.header)) { \
               gInterSource->UpdateArguments(offset / sizeof(void *) - 1, r); \
             } \
-            func.pc += sizeof(base_node_t); \
+            func_pc += sizeof(base_node_t); \
             /* fuse next OP_ireadfpoff  or OP_checkpoint and then OP_ireadfpoff*/ \
-            mre_instr_t &stmt1 = *(reinterpret_cast<mre_instr_t *>(func.pc)); \
+            mre_instr_t &stmt1 = *(reinterpret_cast<mre_instr_t *>(func_pc)); \
             if (stmt1.op == RE_ireadfpoff && offset == (int32_t)stmt1.param.offset) { \
               MPUSH(r); \
-              func.pc += sizeof(mre_instr_t); \
+              func_pc += sizeof(mre_instr_t); \
             } else if (stmt1.op == RE_checkpoint) { \
-              func.pc += sizeof(base_node_t); \
-              mre_instr_t &stmt2 = *(reinterpret_cast<mre_instr_t *>(func.pc)); \
+              func_pc += sizeof(base_node_t); \
+              mre_instr_t &stmt2 = *(reinterpret_cast<mre_instr_t *>(func_pc)); \
               if (stmt2.op == RE_ireadfpoff && offset == (int32_t)stmt2.param.offset) { \
                 MPUSH(r); \
-                func.pc += sizeof(mre_instr_t); \
+                func_pc += sizeof(mre_instr_t); \
               } \
             } \
           } else { \
             MPUSH(r); \
-            func.pc += sizeof(mre_instr_t); \
+            func_pc += sizeof(mre_instr_t); \
           } \
-          goto *(labels[*func.pc]); \
+          goto *(labels[*func_pc]); \
         } \
       }
 
@@ -673,6 +678,10 @@ inline bool PROP_CACHE_GET_THIS(TValue &obj, TValue &name, TValue &r) {
 }
 
 TValue InvokeInterpretMethod(DynMFunction &func) {
+    uint8_t *func_pc = func.pc;
+    TValue *func_operand_stack = func.operand_stack;
+    MStack::size_type func_sp = func.sp;
+
     uint8_t *frame_pointer = (uint8_t *)gInterSource->GetFPAddr();
     uint8_t *global_pointer = (uint8_t *)gInterSource->GetGPAddr();
     // Array of labels for threaded interpretion
@@ -687,7 +696,7 @@ TValue InvokeInterpretMethod(DynMFunction &func) {
     gInterSource->SetCurFunc(&func);
 
     // Get the first mir instruction of this method
-    goto *(labels[((base_node_t *)func.pc)->op]);
+    goto *(labels[((base_node_t *)func_pc)->op]);
 
 // handle each mir instruction
 label_OP_Undef:
@@ -701,15 +710,15 @@ label_OP_assertnonnull:
 
     TValue &addr = MPOP();
 
-    func.pc += sizeof(base_node_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(base_node_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_dread:
   {
 #if 0
     // Handle expression node: dread
-    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func.pc));
+    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func_pc));
     int32_t idx = (int32_t)expr.param.frameIdx;
     DEBUGSOPCODE(dread, Expr, idx);
     // Always allocates an object in heap for Java
@@ -724,15 +733,15 @@ label_OP_dread:
         MPUSH(local);
     }
 #endif
-    func.pc += sizeof(mre_instr_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(mre_instr_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_iread:
   {
 #if 0
     // Handle expression node: iread
-    base_node_t &expr = *(reinterpret_cast<base_node_t *>(func.pc));
+    base_node_t &expr = *(reinterpret_cast<base_node_t *>(func_pc));
     DEBUGOPCODE(iread, Expr);
 
     MValue &addr = MPOP(); TValue2MValue(addr);
@@ -742,15 +751,15 @@ label_OP_iread:
     ENCODE_MPUSH(res);
 
 #endif
-    func.pc += sizeof(mre_instr_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(mre_instr_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_addrof:
   {
 #if 0
     // For address of local var/parameter
-    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func.pc));
+    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func_pc));
     int32_t idx = (int32_t)expr.param.frameIdx;
     DEBUGSOPCODE(addrof, Expr, idx);
 
@@ -769,15 +778,15 @@ label_OP_addrof:
     ENCODE_MPUSH(res);
 
 #endif
-    func.pc += sizeof(mre_instr_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(mre_instr_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_addrof32:
   {
 #if 0
     // Handle expression node: addrof
-    addrof_node_t &expr = *(reinterpret_cast<addrof_node_t *>(func.pc));
+    addrof_node_t &expr = *(reinterpret_cast<addrof_node_t *>(func_pc));
     DEBUGOPCODE(addrof32, Expr);
 
     //MASSERT(expr.primType == PTY_a64, "Type mismatch: 0x%02x (should be PTY_a64)", expr.primType);
@@ -789,14 +798,14 @@ label_OP_addrof32:
     ENCODE_MPUSH(target);
 
 #endif
-    func.pc += sizeof(addrof_node_t) - 4; // Using 4 bytes for symbolname@GOTPCREL
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(addrof_node_t) - 4; // Using 4 bytes for symbolname@GOTPCREL
+    goto *(labels[*func_pc]);
   }
 
 label_OP_ireadoff:
   {
       // Handle expression node: ireadoff
-      mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func.pc));
+      mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func_pc));
       DEBUGCOPCODE(ireadoff, Expr);
       TValue &mv = MPOP();
       //(base.x.a64);
@@ -804,14 +813,14 @@ label_OP_ireadoff:
 
       mv.x.u64 =  *((uint64_t *)addr);
       MPUSH_SELF(mv);
-      func.pc += sizeof(mre_instr_t);
-      goto *(labels[*func.pc]);
+      func_pc += sizeof(mre_instr_t);
+      goto *(labels[*func_pc]);
   }
 
 label_OP_ireadoff32:
   {
 #if 0
-      ireadoff_node_t &expr = *(reinterpret_cast<ireadoff_node_t *>(func.pc));
+      ireadoff_node_t &expr = *(reinterpret_cast<ireadoff_node_t *>(func_pc));
       DEBUGOPCODE(ireadoff32, Expr);
 
       TValue &base = MTOP();
@@ -819,50 +828,79 @@ label_OP_ireadoff32:
       auto addr = (uint8_t *)base.x.c.payload + expr.offset;
       mload(addr, expr.primType, base);
 #endif
-      func.pc += sizeof(ireadoff_node_t);
-      goto *(labels[*func.pc]);
+      func_pc += sizeof(ireadoff_node_t);
+      goto *(labels[*func_pc]);
   }
 
 label_OP_regread:
   {
     // Handle expression node: regread
-    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func.pc));
+    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func_pc));
     int32_t idx = (int32_t)expr.param.frameIdx;
+    TValue r;
 
     DEBUGSOPCODE(regread, Expr, idx);
     switch (idx) {
       case -kSregSp:{
-        MPUSHV((uint64_t)gInterSource->GetSPAddr() | NAN_SPBASE);
+        r.x.u64 = (uint64_t)gInterSource->GetSPAddr() | NAN_SPBASE;
         break;
       }
       case -kSregFp: {
-        MPUSHV((uint64_t)frame_pointer | NAN_FPBASE);
+        r.x.u64 = (uint64_t)frame_pointer | NAN_FPBASE;
         break;
       }
       case -kSregGp: {
-        MPUSHV((uint64_t)global_pointer | NAN_GPBASE);
+        r.x.u64 = (uint64_t)global_pointer | NAN_GPBASE;
         break;
       }
       case -kSregRetval0: {
-        MPUSH(gInterSource->retVal0);
+        r = gInterSource->retVal0;
         break;
       }
       case -kSregThrownval: {
-        TValue mvl = gInterSource->currEH->GetThrownval();
-        MPUSH(mvl);
+        r = gInterSource->currEH->GetThrownval();
         break;
       }
     }
 
-    func.pc += sizeof(mre_instr_t);
-    goto *(labels[*func.pc]);
+    // fuse OP_regread with OP_consval and OP_add
+    mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func_pc + sizeof(mre_instr_t)));
+    if (stmt.op == RE_constval && (IS_ADDRBASE(r.x.u64) || IS_NUMBER(r.x.u64) || IS_DOUBLE(r.x.u64))) {
+      mre_instr_t &stmt1 = *(reinterpret_cast<mre_instr_t *>(func_pc + (2 * sizeof(mre_instr_t))));
+      if (stmt1.op == RE_add) {
+        if (IS_ADDRBASE(r.x.u64)) {
+          r.x.u64 += (int64_t)stmt.param.constval.i16;
+        } else if (IS_NUMBER(r.x.u64)) {
+          int64_t rt = (int64_t)r.x.i32 + (int64_t)stmt.param.constval.i16;
+          if (ABS(rt) > INT_MAX)
+            r.x.f64 = (double)rt;
+          else
+            r.x.i32 = rt;
+        } else {
+          double rt;
+          rt = r.x.f64 + (double)stmt.param.constval.i16;
+          if (rt == 0) {
+            r.x.u64 = POS_ZERO;
+          } else {
+            r.x.f64 = rt;
+          }
+        }
+        func_pc = func_pc + sizeof(binary_node_t) + (2 *sizeof(mre_instr_t));
+        MPUSH(r);
+        goto *(labels[*func_pc]);
+      }
+    }
+
+    MPUSH(r);
+    func_pc += sizeof(mre_instr_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_addroffunc:
   {
     // Handle expression node: addroffunc
-    //addroffunc_node_t &expr = *(reinterpret_cast<addroffunc_node_t *>(func.pc));
-    constval_node_t &expr = *(reinterpret_cast<constval_node_t *>(func.pc));
+    //addroffunc_node_t &expr = *(reinterpret_cast<addroffunc_node_t *>(func_pc));
+    constval_node_t &expr = *(reinterpret_cast<constval_node_t *>(func_pc));
     DEBUGOPCODE(addroffunc, Expr);
 
     TValue res;
@@ -870,39 +908,91 @@ label_OP_addroffunc:
     res.x.u64 = ((uint64_t )expr.constVal.value) | NAN_FUNCTION;
     MPUSH(res);
 
-    func.pc += sizeof(constval_node_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(constval_node_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_constval:
   {
     // Handle expression node: constval
-    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func.pc));
+    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func_pc));
     DEBUGCOPCODE(constval, Expr);
-    TValue res = {.x.u64 = NAN_NUMBER};
-    switch(expr.primType) {
-        case PTY_i8:  res.x.i32 = expr.param.constval.i8;  break;
-        case PTY_i16:
-        case PTY_i32: res.x.i32 = expr.param.constval.i16; break;
-        case PTY_i64: res.x.i32 = expr.param.constval.i16; break;
-        case PTY_u1:
-        case PTY_u8:  res.x.u32 = expr.param.constval.u8;  break;
-        case PTY_u16:
-        case PTY_u32:
-        case PTY_u64:
-        case PTY_a32: // running on 64-bits machine
-        case PTY_a64: res.x.u32 = expr.param.constval.u16; break;
-        default: MASSERT(false, "Unexpected type for OP_constval: 0x%02x", res.x.c.type);
+    func_pc += sizeof(mre_instr_t);
+
+    mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func_pc));
+    if (stmt.op == RE_intrinsicop) {
+      // fuse OP_constval with INTRN_JS_GET_BISTRING or INTRN_JS_GET_BIOBJECT
+      MIRIntrinsicID intrnid = (MIRIntrinsicID)stmt.param.intrinsic.intrinsicId;
+      TValue retMv;
+      switch (intrnid) {
+        case INTRN_JS_GET_BISTRING: {
+          retMv = __string_value(__jsstr_get_builtin((__jsbuiltin_string_id)expr.param.constval.u16));
+          func_pc += sizeof(mre_instr_t);
+          break;
+        }
+        case INTRN_JS_GET_BIOBJECT: {
+          retMv = __object_value(__jsobj_get_or_create_builtin((__jsbuiltin_object_id)expr.param.constval.u16));
+          func_pc += sizeof(mre_instr_t);
+          break;
+        }
+        default: {
+          retMv = __number_value((int32_t)expr.param.constval.i16);
+          break;
+        }
+      }
+      MPUSH(retMv);
+    } else if (stmt.op == RE_intrinsiccall) {
+      // fuse OP_constval with INTRN_JSOP_ADD
+      MIRIntrinsicID intrnid = (MIRIntrinsicID)stmt.param.intrinsic.intrinsicId;
+      bool isEhHappend = false;
+      switch (intrnid) {
+        case INTRN_JSOP_ADD: {
+          TValue op0 = MPOP();
+          if (IS_NUMBER(op0.x.u64)) {
+            int64_t r = (int64_t)op0.x.i32 + (int64_t)expr.param.constval.i16;
+            if (ABS(r) > INT_MAX) {
+              op0.x.f64 = (double)r;
+            } else {
+              op0.x.i32 = r;
+            }
+            SetRetval0(op0);
+            func_pc += sizeof(mre_instr_t);
+            break;
+          } else if (IS_DOUBLE(op0.x.u64)) {
+            double r;
+            r = op0.x.f64 + expr.param.constval.i16;
+            if (r == 0) {
+              op0.x.u64 = POS_ZERO;
+            } else {
+              op0.x.f64 = r;
+            }
+            SetRetval0(op0);
+            func_pc += sizeof(mre_instr_t);
+            break;
+          } else {
+            MPUSH_SELF(op0);
+            TValue retMv = __number_value((int32_t)expr.param.constval.i16);
+            MPUSH(retMv);
+            break;
+          }
+        }
+        default: {
+          TValue retMv = __number_value((int32_t)expr.param.constval.i16);
+          MPUSH(retMv);
+          break;
+        }
+      }
+    } else {
+      TValue res = {.x.u64 = NAN_NUMBER};
+      res.x.i32 = (int32_t)expr.param.constval.i16;
+      MPUSH(res);
     }
-    res.x.u64 = /*(res.x.u64 == 0) ? POS_ZERO : */(res.x.u64 | NAN_NUMBER);
-    MPUSH(res);
-    func.pc += sizeof(mre_instr_t);
-    goto *(labels[*func.pc]);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_constval64:
   {
-    constval_node_t &expr = *(reinterpret_cast<constval_node_t *>(func.pc));
+    constval_node_t &expr = *(reinterpret_cast<constval_node_t *>(func_pc));
     DEBUGOPCODE(constval64, Expr);
 
     TValue res = {.x.u64 = 0};
@@ -919,8 +1009,8 @@ label_OP_constval64:
       }
       res.x.f64 = xx.f64;
       MPUSH(res);
-      func.pc += sizeof(constval_node_t);
-      goto *(labels[*func.pc]);
+      func_pc += sizeof(constval_node_t);
+      goto *(labels[*func_pc]);
     } else {
       switch (exprPtyp) {
         case PTY_i32: {
@@ -1008,15 +1098,15 @@ label_OP_constval64:
       }
     }
     MPUSH(res);
-    func.pc += sizeof(constval_node_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(constval_node_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_conststr:
   {
 #if 0
     // Handle expression node: conststr
-    conststr_node_t &expr = *(reinterpret_cast<conststr_node_t *>(func.pc));
+    conststr_node_t &expr = *(reinterpret_cast<conststr_node_t *>(func_pc));
     DEBUGOPCODE(conststr, Expr);
 
     MValue res;
@@ -1024,15 +1114,15 @@ label_OP_conststr:
     res.x.a64 = *(uint8_t **)&expr.stridx;
     ENCODE_MPUSH(res);
 
-    func.pc += sizeof(conststr_node_t) + 4; // Needs Ed to fix the type for conststr
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(conststr_node_t) + 4; // Needs Ed to fix the type for conststr
+    goto *(labels[*func_pc]);
 #endif
   }
 
 label_OP_cvt:
   {
     // Handle expression node: cvt
-    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func.pc));
+    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func_pc));
     PrimType from_ptyp = (PrimType)expr.param.constval.u8;
     PrimType destPtyp = expr.primType;
     DEBUGOPCODE(cvt, Expr);
@@ -1041,8 +1131,8 @@ label_OP_cvt:
     if (IsPrimitiveDyn(from_ptyp)) {
       CHECKREFERENCEMVALUE(op);
     }
-    func.pc += sizeof(mre_instr_t);
-    auto target = labels[*func.pc];
+    func_pc += sizeof(mre_instr_t);
+    auto target = labels[*func_pc];
 
     int64_t from_int;
     float   from_float;
@@ -1056,11 +1146,13 @@ label_OP_cvt:
       CATCHINTRINSICOP();
       if (isEhHappend) {
         if (newPc) {
-          func.pc = (uint8_t *)newPc;
+          func_pc = (uint8_t *)newPc;
           goto *(labels[*(uint8_t *)newPc]);
         } else {
           gInterSource->InsertEplog();
             // gInterSource->FinishFunc();
+          func.pc = func_pc;
+          func.sp = func_sp;
           return __none_value(Exec_handle_exc);
         }
       } else {
@@ -1208,7 +1300,7 @@ label_OP_retype:
   {
 #if 0
     // Handle expression node: retype
-    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func.pc));
+    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func_pc));
     DEBUGOPCODE(retype, Expr);
 
     // retype <prim-type> <type> (<opnd0>)
@@ -1218,15 +1310,15 @@ label_OP_retype:
     //MASSERT(expr.GetOpPtyp() == res.ptyp, "Type mismatch: 0x%02x and 0x%02x", expr.GetOpPtyp(), res.ptyp);
     res.ptyp = expr.primType;
 #endif
-    func.pc += sizeof(mre_instr_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(mre_instr_t);
+    goto *(labels[*func_pc]);
   }
 
 
 label_OP_sext:
   {
     // Handle expression node: sext
-    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func.pc));
+    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func_pc));
     DEBUGOPCODE(sext, Expr);
 
     //MASSERT(expr.param.extractbits.boffset == 0, "Unexpected offset");
@@ -1234,14 +1326,14 @@ label_OP_sext:
     TValue &op = MTOP();
     op.x.i32 = (op.x.i32 >> (expr.param.extractbits.bsize - 1) & 1) ? op.x.i32 | ~mask : op.x.i32 & mask;
     // op.ptyp = expr.primType;
-    func.pc += sizeof(mre_instr_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(mre_instr_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_zext:
   {
     // Handle expression node: zext
-    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func.pc));
+    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func_pc));
     DEBUGOPCODE(zext, Expr);
 
     //MASSERT(expr.param.extractbits.boffset == 0, "Unexpected offset");
@@ -1250,14 +1342,14 @@ label_OP_zext:
     op.x.i32 &= mask;
     // op.ptyp = expr.primType;
 
-    func.pc += sizeof(mre_instr_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(mre_instr_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_add:
   {
     // Handle expression node: add
-    binary_node_t &expr = *(reinterpret_cast<binary_node_t *>(func.pc));
+    binary_node_t &expr = *(reinterpret_cast<binary_node_t *>(func_pc));
     DEBUGOPCODE(add, Expr);
     TValue &op1 = MPOP();
     TValue &op0 = MPOP();
@@ -1266,53 +1358,53 @@ label_OP_add:
       case PTY_u8: {
         op0.x.u8 = op0.x.u8 + op1.x.u8;
         MPUSH_SELF(op0);
-        func.pc += sizeof(binary_node_t);
-        goto *(labels[*func.pc]);
+        func_pc += sizeof(binary_node_t);
+        goto *(labels[*func_pc]);
       }
       case PTY_u16: {
         op0.x.u16 = op0.x.u16 + op1.x.u16;
         MPUSH_SELF(op0);
-        func.pc += sizeof(binary_node_t);
-        goto *(labels[*func.pc]);
+        func_pc += sizeof(binary_node_t);
+        goto *(labels[*func_pc]);
       }
       case PTY_u32: {
         op0.x.u32 = op0.x.u32 + op1.x.u32;
         MPUSH_SELF(op0);
-        func.pc += sizeof(binary_node_t);
-        goto *(labels[*func.pc]);
+        func_pc += sizeof(binary_node_t);
+        goto *(labels[*func_pc]);
       }
       case PTY_i8: {
         op0.x.i8 = op0.x.i8 + op1.x.i8;
         MPUSH_SELF(op0);
-        func.pc += sizeof(binary_node_t);
-        goto *(labels[*func.pc]);
+        func_pc += sizeof(binary_node_t);
+        goto *(labels[*func_pc]);
       }
       case PTY_i16: {
         op0.x.i16 = op0.x.i16 + op1.x.i16;
         MPUSH_SELF(op0);
-        func.pc += sizeof(binary_node_t);
-        goto *(labels[*func.pc]);
+        func_pc += sizeof(binary_node_t);
+        goto *(labels[*func_pc]);
       }
       case PTY_i32: {
         op0.x.i32 = op0.x.i32 + op1.x.i32;
         MPUSH_SELF(op0);
-        func.pc += sizeof(binary_node_t);
-        goto *(labels[*func.pc]);
+        func_pc += sizeof(binary_node_t);
+        goto *(labels[*func_pc]);
       }
       default: {
         FAST_MATH(+);
         if (IS_NUMBER(op1.x.u64) && IS_ADDRESS(op0.x.u64)) {
           op0.x.u64 = op0.x.u64 + op1.x.i32;
           MPUSH_SELF(op0);
-          func.pc += sizeof(binary_node_t);
-          goto *(labels[*func.pc]);
+          func_pc += sizeof(binary_node_t);
+          goto *(labels[*func_pc]);
         }
         CHECKREFERENCEMVALUE(op0);
         CHECKREFERENCEMVALUE(op1);
         TValue resVal = gInterSource->PrimAdd(op0, op1, expr.primType);
         MPUSH(resVal);
-        func.pc += sizeof(binary_node_t);
-        goto *(labels[*func.pc]);
+        func_pc += sizeof(binary_node_t);
+        goto *(labels[*func_pc]);
       }
     }
   }
@@ -1320,7 +1412,7 @@ label_OP_add:
 label_OP_sub:
   {
     // Handle expression node: sub
-    binary_node_t &expr = *(reinterpret_cast<binary_node_t *>(func.pc));
+    binary_node_t &expr = *(reinterpret_cast<binary_node_t *>(func_pc));
     DEBUGOPCODE(sub, Expr);
     TValue &op1 = MPOP();
     TValue &op0 = MPOP();
@@ -1356,8 +1448,8 @@ label_OP_sub:
           }
        }
        MPUSH_SELF(op0);
-      func.pc += sizeof(binary_node_t);
-      goto *(labels[*func.pc]);
+      func_pc += sizeof(binary_node_t);
+      goto *(labels[*func_pc]);
     } else {
       FAST_MATH(-);
       CHECKREFERENCEMVALUE(op0);
@@ -1375,7 +1467,7 @@ label_OP_sub:
 label_OP_mul:
   {
     // Handle expression node: mul
-    binary_node_t &expr = *(reinterpret_cast<binary_node_t *>(func.pc));
+    binary_node_t &expr = *(reinterpret_cast<binary_node_t *>(func_pc));
     DEBUGOPCODE(mul, Expr);
     TValue &op1 = MPOP();
     TValue &op0 = MPOP();
@@ -1412,8 +1504,8 @@ label_OP_mul:
           }
        }
        MPUSH_SELF(op0);
-       func.pc += sizeof(binary_node_t);
-       goto *(labels[*func.pc]);
+       func_pc += sizeof(binary_node_t);
+       goto *(labels[*func_pc]);
     } else {
   //         FAST_MUL(*);
   if (IS_NUMBER(op1.x.u64)) {
@@ -1424,21 +1516,21 @@ label_OP_mul:
       } else
         op0.x.i32 = r;
       MPUSH_SELF(op0);
-      func.pc += sizeof(binary_node_t);
-      goto *(labels[*func.pc]);
+      func_pc += sizeof(binary_node_t);
+      goto *(labels[*func_pc]);
     } else if (IS_DOUBLE(op0.x.u64)) {
       double r;
       r = op0.x.f64 * (double)op1.x.i32;
       if (r == 0) {
         op0.x.u64 = ((op0.x.f64 > 0 && op1.x.i32 >= 0) || (op0.x.f64 <= 0 && op1.x.i32 < 0)) ?  POS_ZERO : NEG_ZERO;
         MPUSH_SELF(op0);
-        func.pc += sizeof(binary_node_t);
-        goto *(labels[*func.pc]);
+        func_pc += sizeof(binary_node_t);
+        goto *(labels[*func_pc]);
       } else if (ABS(r) <= NumberMaxValue) {
         op0.x.f64 = r;
         MPUSH_SELF(op0);
-        func.pc += sizeof(binary_node_t);
-        goto *(labels[*func.pc]);
+        func_pc += sizeof(binary_node_t);
+        goto *(labels[*func_pc]);
       }
     }
   } else if (IS_DOUBLE(op1.x.u64)) {
@@ -1448,26 +1540,26 @@ label_OP_mul:
       if (r == 0) {
         op0.x.u64 = ((op0.x.f64 > 0 && op1.x.f64 > 0) || (op0.x.f64 <= 0 && op1.x.f64 <= 0)) ?  POS_ZERO : NEG_ZERO;
         MPUSH_SELF(op0);
-        func.pc += sizeof(binary_node_t);
-        goto *(labels[*func.pc]);
+        func_pc += sizeof(binary_node_t);
+        goto *(labels[*func_pc]);
      } else if (ABS(r) <= NumberMaxValue) {
         op0.x.f64 = r;
         MPUSH_SELF(op0);
-        func.pc += sizeof(binary_node_t);
-        goto *(labels[*func.pc]);
+        func_pc += sizeof(binary_node_t);
+        goto *(labels[*func_pc]);
       }
     } else if (IS_NUMBER(op0.x.u64)) {
       r = (double)op0.x.i32 * op1.x.f64;
       if (r == 0) {
         op0.x.u64 = ((op0.x.i32 >= 0 && op1.x.f64 > 0) || (op0.x.i32 < 0 && op1.x.f64 < 0)) ?  POS_ZERO : NEG_ZERO;
         MPUSH_SELF(op0);
-        func.pc += sizeof(binary_node_t);
-        goto *(labels[*func.pc]);
+        func_pc += sizeof(binary_node_t);
+        goto *(labels[*func_pc]);
       } else if (ABS(r) <= NumberMaxValue) {
         op0.x.f64 = r;
         MPUSH_SELF(op0);
-        func.pc += sizeof(binary_node_t);
-        goto *(labels[*func.pc]);
+        func_pc += sizeof(binary_node_t);
+        goto *(labels[*func_pc]);
       }
     }
   }
@@ -1486,7 +1578,7 @@ label_OP_mul:
 label_OP_div:
   {
     // Handle expression node: div
-    binary_node_t &expr = *(reinterpret_cast<binary_node_t *>(func.pc));
+    binary_node_t &expr = *(reinterpret_cast<binary_node_t *>(func_pc));
     DEBUGOPCODE(div, Expr);
     TValue &op1 = MPOP();
     TValue &op0 = MPOP();
@@ -1521,8 +1613,8 @@ label_OP_div:
             MIR_ASSERT(false);
           }
        }
-      func.pc += sizeof(binary_node_t);
-      goto *(labels[*func.pc]);
+      func_pc += sizeof(binary_node_t);
+      goto *(labels[*func_pc]);
     } else {
       FAST_DIVISION();
       CHECKREFERENCEMVALUE(op0);
@@ -1540,7 +1632,7 @@ label_OP_div:
 label_OP_rem:
   {
     // Handle expression node: rem
-    binary_node_t &expr = *(reinterpret_cast<binary_node_t *>(func.pc));
+    binary_node_t &expr = *(reinterpret_cast<binary_node_t *>(func_pc));
     DEBUGOPCODE(rem, Expr);
     TValue &op1 = MPOP();
     TValue &op0 = MPOP();
@@ -1575,14 +1667,14 @@ label_OP_rem:
           }
        }
        MPUSH_SELF(op0);
-       func.pc += sizeof(binary_node_t);
-       goto *(labels[*func.pc]);
+       func_pc += sizeof(binary_node_t);
+       goto *(labels[*func_pc]);
     } else {
       if (IS_NUMBER(op0.x.u64) && IS_NUMBER(op1.x.u64) && op1.x.i32 > 0) {
         op0.x.i32 = op0.x.i32 % op1.x.i32;
         MPUSH_SELF(op0);
-        func.pc += sizeof(binary_node_t);
-        goto *(labels[*func.pc]);
+        func_pc += sizeof(binary_node_t);
+        goto *(labels[*func_pc]);
       }
       CHECKREFERENCEMVALUE(op0);
       CHECKREFERENCEMVALUE(op1);
@@ -1606,12 +1698,12 @@ label_OP_lshr:
 label_OP_ashr:
   {
     // Handle expression node: shl
-    binary_node_t &expr = *(reinterpret_cast<binary_node_t *>(func.pc));
+    binary_node_t &expr = *(reinterpret_cast<binary_node_t *>(func_pc));
     DEBUGOPCODE(shl, Expr);
     if (!IsPrimitiveDyn(expr.primType)) {
       JSARITH();
-      func.pc += sizeof(binary_node_t);
-      goto *(labels[*func.pc]);
+      func_pc += sizeof(binary_node_t);
+      goto *(labels[*func_pc]);
     } else {
       TValue &op1 = MPOP();
       TValue &op0 = MPOP();
@@ -1630,21 +1722,21 @@ label_OP_ashr:
 label_OP_max:
   {
     // Handle expression node: max
-    binary_node_t &expr = *(reinterpret_cast<binary_node_t *>(func.pc));
+    binary_node_t &expr = *(reinterpret_cast<binary_node_t *>(func_pc));
     DEBUGOPCODE(max, Expr);
     JSARITH();
-    func.pc += sizeof(binary_node_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(binary_node_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_min:
   {
     // Handle expression node: min
-    binary_node_t &expr = *(reinterpret_cast<binary_node_t *>(func.pc));
+    binary_node_t &expr = *(reinterpret_cast<binary_node_t *>(func_pc));
     DEBUGOPCODE(min, Expr);
     JSARITH();
-    func.pc += sizeof(binary_node_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(binary_node_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_CG_array_elem_add:
@@ -1656,14 +1748,14 @@ label_OP_CG_array_elem_add:
     TValue &base = MTOP();
     base.x.c.payload += offset.x.i32;
 
-    func.pc += sizeof(binary_node_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(binary_node_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_eq:
   {
     // Handle expression node: eq
-    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func.pc));
+    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func_pc));
     DEBUGOPCODE(eq, Expr);
     TValue  &mVal1 = MPOP();
     TValue  &mVal0 = MPOP();
@@ -1672,32 +1764,32 @@ label_OP_eq:
       case PTY_u8: {
         mVal0.x.u64 = (mVal0.x.u8 == mVal1.x.u8) | NAN_BOOLEAN ;
         MPUSH_SELF(mVal0);
-        func.pc += sizeof(mre_instr_t);
-        goto *(labels[*func.pc]);
+        func_pc += sizeof(mre_instr_t);
+        goto *(labels[*func_pc]);
       }
       case PTY_u16: {
         mVal0.x.u64 = (mVal0.x.u16 == mVal1.x.u16) | NAN_BOOLEAN ;
         MPUSH_SELF(mVal0);
-        func.pc += sizeof(mre_instr_t);
-        goto *(labels[*func.pc]);
+        func_pc += sizeof(mre_instr_t);
+        goto *(labels[*func_pc]);
       }
       case PTY_u32: {
         mVal0.x.u64 = (mVal0.x.u32 == mVal1.x.u32) | NAN_BOOLEAN ;
         MPUSH_SELF(mVal0);
-        func.pc += sizeof(mre_instr_t);
-        goto *(labels[*func.pc]);
+        func_pc += sizeof(mre_instr_t);
+        goto *(labels[*func_pc]);
       }
       case PTY_i16: {
         mVal0.x.u64 = (mVal0.x.i16 == mVal1.x.i16) | NAN_BOOLEAN ;
         MPUSH_SELF(mVal0);
-        func.pc += sizeof(mre_instr_t);
-        goto *(labels[*func.pc]);
+        func_pc += sizeof(mre_instr_t);
+        goto *(labels[*func_pc]);
       }
       case PTY_i32: {
         mVal0.x.u64 = (mVal0.x.i32 == mVal1.x.i32) | NAN_BOOLEAN ;
         MPUSH_SELF(mVal0);
-        func.pc += sizeof(mre_instr_t);
-        goto *(labels[*func.pc]);
+        func_pc += sizeof(mre_instr_t);
+        goto *(labels[*func_pc]);
       }
       default: {
         FAST_COMPARE(==);
@@ -1716,7 +1808,7 @@ label_OP_eq:
 label_OP_ge:
   {
     // Handle expression node: ge
-    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func.pc));
+    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func_pc));
     DEBUGOPCODE(ge, Expr);
     TValue  &mVal1 = MPOP();
     TValue  &mVal0 = MPOP();
@@ -1735,7 +1827,7 @@ label_OP_ge:
 label_OP_gt:
   {
     // Handle expression node: gt
-    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func.pc));
+    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func_pc));
     DEBUGOPCODE(gt, Expr);
     TValue  &mVal1 = MPOP();
     TValue  &mVal0 = MPOP();
@@ -1754,7 +1846,7 @@ label_OP_gt:
 label_OP_le:
   {
     // Handle expression node: le
-    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func.pc));
+    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func_pc));
     DEBUGOPCODE(le, Expr);
     TValue  &mVal1 = MPOP();
     TValue  &mVal0 = MPOP();
@@ -1763,32 +1855,32 @@ label_OP_le:
       case PTY_u8: {
         mVal0.x.u64 = (mVal0.x.u8 <= mVal1.x.u8) | NAN_BOOLEAN ;
         MPUSH_SELF(mVal0);
-        func.pc += sizeof(mre_instr_t);
-        goto *(labels[*func.pc]);
+        func_pc += sizeof(mre_instr_t);
+        goto *(labels[*func_pc]);
       }
       case PTY_u16: {
         mVal0.x.u64 = (mVal0.x.u16 <= mVal1.x.u16) | NAN_BOOLEAN ;
         MPUSH_SELF(mVal0);
-        func.pc += sizeof(mre_instr_t);
-        goto *(labels[*func.pc]);
+        func_pc += sizeof(mre_instr_t);
+        goto *(labels[*func_pc]);
       }
       case PTY_u32: {
         mVal0.x.u64 = (mVal0.x.u32 <= mVal1.x.u32) | NAN_BOOLEAN ;
         MPUSH_SELF(mVal0);
-        func.pc += sizeof(mre_instr_t);
-        goto *(labels[*func.pc]);
+        func_pc += sizeof(mre_instr_t);
+        goto *(labels[*func_pc]);
       }
       case PTY_i16: {
         mVal0.x.u64 = (mVal0.x.i16 <= mVal1.x.i16) | NAN_BOOLEAN ;
         MPUSH_SELF(mVal0);
-        func.pc += sizeof(mre_instr_t);
-        goto *(labels[*func.pc]);
+        func_pc += sizeof(mre_instr_t);
+        goto *(labels[*func_pc]);
       }
       case PTY_i32: {
         mVal0.x.u64 = (mVal0.x.i32 <= mVal1.x.i32) | NAN_BOOLEAN ;
         MPUSH_SELF(mVal0);
-        func.pc += sizeof(mre_instr_t);
-        goto *(labels[*func.pc]);
+        func_pc += sizeof(mre_instr_t);
+        goto *(labels[*func_pc]);
       }
       default: {
         FAST_COMPARE(<=);
@@ -1808,7 +1900,7 @@ label_OP_le:
 label_OP_lt:
   {
     // Handle expression node: lt
-    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func.pc));
+    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func_pc));
     DEBUGOPCODE(lt, Expr);
     TValue  &mVal1 = MPOP();
     TValue  &mVal0 = MPOP();
@@ -1817,32 +1909,32 @@ label_OP_lt:
       case PTY_u8: {
         mVal0.x.u64 = (mVal0.x.u8 < mVal1.x.u8) | NAN_BOOLEAN ;
         MPUSH_SELF(mVal0);
-        func.pc += sizeof(mre_instr_t);
-        goto *(labels[*func.pc]);
+        func_pc += sizeof(mre_instr_t);
+        goto *(labels[*func_pc]);
       }
       case PTY_u16: {
         mVal0.x.u64 = (mVal0.x.u16 < mVal1.x.u16) | NAN_BOOLEAN ;
         MPUSH_SELF(mVal0);
-        func.pc += sizeof(mre_instr_t);
-        goto *(labels[*func.pc]);
+        func_pc += sizeof(mre_instr_t);
+        goto *(labels[*func_pc]);
       }
       case PTY_u32: {
         mVal0.x.u64 = (mVal0.x.u32 < mVal1.x.u32) | NAN_BOOLEAN ;
         MPUSH_SELF(mVal0);
-        func.pc += sizeof(mre_instr_t);
-        goto *(labels[*func.pc]);
+        func_pc += sizeof(mre_instr_t);
+        goto *(labels[*func_pc]);
       }
       case PTY_i16: {
         mVal0.x.u64 = (mVal0.x.i16 < mVal1.x.i16) | NAN_BOOLEAN ;
         MPUSH_SELF(mVal0);
-        func.pc += sizeof(mre_instr_t);
-        goto *(labels[*func.pc]);
+        func_pc += sizeof(mre_instr_t);
+        goto *(labels[*func_pc]);
       }
       case PTY_i32: {
         mVal0.x.u64 = (mVal0.x.i32 < mVal1.x.i32) | NAN_BOOLEAN ;
         MPUSH_SELF(mVal0);
-        func.pc += sizeof(mre_instr_t);
-        goto *(labels[*func.pc]);
+        func_pc += sizeof(mre_instr_t);
+        goto *(labels[*func_pc]);
       }
       default: {
         FAST_COMPARE(<);
@@ -1862,7 +1954,7 @@ label_OP_lt:
 label_OP_ne:
   {
     // Handle expression node: ne
-    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func.pc));
+    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func_pc));
     DEBUGOPCODE(ne, Expr);
     TValue  &mVal1 = MPOP();
     TValue  &mVal0 = MPOP();
@@ -1881,47 +1973,47 @@ label_OP_ne:
 label_OP_cmp:
   {
     // Handle expression node: cmp
-    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func.pc));
+    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func_pc));
     DEBUGOPCODE(cmp, Expr);
     EXPRCMPLGOP_T(cmp, 1, expr.primType, expr.GetOpPtyp()); // if any operand is NaN, the result is definitely not 0.
-    func.pc += sizeof(mre_instr_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(mre_instr_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_cmpl:
   {
     // Handle expression node: cmpl
-    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func.pc));
+    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func_pc));
     DEBUGOPCODE(cmpl, Expr);
     EXPRCMPLGOP_T(cmpl, -1, expr.primType, expr.GetOpPtyp());
-    func.pc += sizeof(mre_instr_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(mre_instr_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_cmpg:
   {
     // Handle expression node: cmpg
-    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func.pc));
+    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func_pc));
     DEBUGOPCODE(cmpg, Expr);
     EXPRCMPLGOP_T(cmpg, 1, expr.primType, expr.GetOpPtyp());
-    func.pc += sizeof(mre_instr_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(mre_instr_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_select:
   {
     // Handle expression node: select
-    ternary_node_t &expr = *(reinterpret_cast<ternary_node_t *>(func.pc));
+    ternary_node_t &expr = *(reinterpret_cast<ternary_node_t *>(func_pc));
     DEBUGOPCODE(select, Expr);
     EXPRSELECTOP_T();
-    func.pc += sizeof(ternary_node_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(ternary_node_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_extractbits:
   {
     // Handle expression node: extractbits
-    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func.pc));
+    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func_pc));
     DEBUGOPCODE(extractbits, Expr);
 
     uint64 mask = ((1ull << expr.param.extractbits.bsize) - 1) << expr.param.extractbits.boffset;
@@ -1929,15 +2021,15 @@ label_OP_extractbits:
     op.x.i64 = (uint64)(op.x.i64 & mask) >> expr.param.extractbits.boffset;
     //op.ptyp = expr.primType;
 
-    func.pc += sizeof(mre_instr_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(mre_instr_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_ireadpcoff:
   {
 #if 0
     // Handle expression node: ireadpcoff
-    ireadpcoff_node_t &expr = *(reinterpret_cast<ireadpcoff_node_t *>(func.pc));
+    ireadpcoff_node_t &expr = *(reinterpret_cast<ireadpcoff_node_t *>(func_pc));
     DEBUGOPCODE(ireadpcoff, Expr);
 
     // Generated from addrof for symbols defined in other module
@@ -1947,15 +2039,15 @@ label_OP_ireadpcoff:
     mload(addr, expr.primType, res);
     ENCODE_MPUSH(res);
 #endif
-    func.pc += sizeof(ireadpcoff_node_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(ireadpcoff_node_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_addroffpc:
   {
 #if 0
     // Handle expression node: addroffpc
-    addroffpc_node_t &expr = *(reinterpret_cast<addroffpc_node_t *>(func.pc));
+    addroffpc_node_t &expr = *(reinterpret_cast<addroffpc_node_t *>(func_pc));
     DEBUGOPCODE(addroffpc, Expr);
 
     MValue target;
@@ -1963,15 +2055,15 @@ label_OP_addroffpc:
     target.x.a64 = (uint8_t*)&expr.offset + expr.offset;
     ENCODE_MPUSH(target);
 
-    func.pc += sizeof(addroffpc_node_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(addroffpc_node_t);
+    goto *(labels[*func_pc]);
 #endif
   }
 
 label_OP_dassign:
   {
     // Handle statement node: dassign
-    mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func.pc));
+    mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func_pc));
     int32_t idx = (int32_t)stmt.param.frameIdx;
     DEBUGSOPCODE(dassign, Stmt, idx);
 
@@ -1984,15 +2076,15 @@ label_OP_dassign:
     else {
         MLOCALS(-idx).x.u64 = res.x.u64;
     }
-    func.pc += sizeof(mre_instr_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(mre_instr_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_iassign:
   {
 #if 0
     // Handle statement node: iassign
-    iassignoff_stmt_t &stmt = *(reinterpret_cast<iassignoff_stmt_t *>(func.pc));
+    iassignoff_stmt_t &stmt = *(reinterpret_cast<iassignoff_stmt_t *>(func_pc));
     DEBUGOPCODE(iassign, Stmt);
 
     // Lower iassign to iassignoff
@@ -2004,15 +2096,15 @@ label_OP_iassign:
     //(addr);
     mstore(addr, stmt.primType, res_);
 
-    func.pc += sizeof(iassignoff_stmt_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(iassignoff_stmt_t);
+    goto *(labels[*func_pc]);
 #endif
   }
 
 label_OP_iassignoff:
   {
     // Handle statement node: iassignoff
-    mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func.pc));
+    mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func_pc));
     DEBUGCOPCODE(iassignoff, Stmt);
     TValue &res = MPOP();
     TValue &base = MPOP();
@@ -2026,14 +2118,14 @@ label_OP_iassignoff:
     }
     *(uint64_t *)addr = res.x.u64;
 
-    func.pc += sizeof(mre_instr_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(mre_instr_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_iassignoff32:
   {
 #if 0
-    iassignoff_stmt_t &stmt = *(reinterpret_cast<iassignoff_stmt_t *>(func.pc));
+    iassignoff_stmt_t &stmt = *(reinterpret_cast<iassignoff_stmt_t *>(func_pc));
     DEBUGOPCODE(iassignoff32, Stmt);
 
     TValue &res = MPOP();
@@ -2044,15 +2136,15 @@ label_OP_iassignoff32:
     auto addr = base_.x.a64 + stmt.offset;
     mstore(addr, stmt.primType, res_);
 
-    func.pc += sizeof(iassignoff_stmt_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(iassignoff_stmt_t);
+    goto *(labels[*func_pc]);
 #endif
   }
 
 label_OP_regassign:
   {
     // Handle statement node: regassign
-    mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func.pc));
+    mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func_pc));
     int32_t idx = (int32_t)stmt.param.frameIdx;
     TValue &res = MPOP();
     CHECKREFERENCEMVALUE(res);
@@ -2077,8 +2169,8 @@ label_OP_regassign:
       break;
     }
 
-    func.pc += sizeof(mre_instr_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(mre_instr_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_igoto:
@@ -2088,17 +2180,17 @@ label_OP_goto:
 label_OP_goto32:
   {
     // Handle statement node: goto
-    goto_stmt_t &stmt = *(reinterpret_cast<goto_stmt_t *>(func.pc));
-    // mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func.pc));
+    goto_stmt_t &stmt = *(reinterpret_cast<goto_stmt_t *>(func_pc));
+    // mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func_pc));
     // gInterSource->currEH->FreeEH();
     DEBUGOPCODE(goto32, Stmt);
 
-   // if(*(func.pc + sizeof(goto_stmt_t)) == OP_endtry)
+   // if(*(func_pc + sizeof(goto_stmt_t)) == OP_endtry)
    //     func.try_catch_pc = nullptr;
 
-    // func.pc += sizeof(mre_instr_t);
-    func.pc = (uint8_t*)&stmt.offset + stmt.offset;
-    goto *(labels[*func.pc]);
+    // func_pc += sizeof(mre_instr_t);
+    func_pc = (uint8_t*)&stmt.offset + stmt.offset;
+    goto *(labels[*func_pc]);
   }
 
 label_OP_brfalse:
@@ -2106,15 +2198,15 @@ label_OP_brfalse:
 label_OP_brfalse32:
   {
     // Handle statement node: brfalse
-    condgoto_stmt_t &stmt = *(reinterpret_cast<condgoto_stmt_t *>(func.pc));
+    condgoto_stmt_t &stmt = *(reinterpret_cast<condgoto_stmt_t *>(func_pc));
     DEBUGOPCODE(brfalse32, Stmt);
 
     TValue &cond = MPOP();
     if(cond.x.u1)
-        func.pc += sizeof(condgoto_stmt_t);
+        func_pc += sizeof(condgoto_stmt_t);
     else
-        func.pc = (uint8_t*)&stmt.offset + stmt.offset;
-    goto *(labels[*func.pc]);
+        func_pc = (uint8_t*)&stmt.offset + stmt.offset;
+    goto *(labels[*func_pc]);
   }
 
 label_OP_brtrue:
@@ -2122,15 +2214,15 @@ label_OP_brtrue:
 label_OP_brtrue32:
   {
     // Handle statement node: brtrue
-    condgoto_stmt_t &stmt = *(reinterpret_cast<condgoto_stmt_t *>(func.pc));
+    condgoto_stmt_t &stmt = *(reinterpret_cast<condgoto_stmt_t *>(func_pc));
     DEBUGOPCODE(brtrue32, Stmt);
 
     TValue &cond = MPOP();
     if(cond.x.u1)
-        func.pc = (uint8_t*)&stmt.offset + stmt.offset;
+        func_pc = (uint8_t*)&stmt.offset + stmt.offset;
     else
-        func.pc += sizeof(condgoto_stmt_t);
-    goto *(labels[*func.pc]);
+        func_pc += sizeof(condgoto_stmt_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_return:
@@ -2141,28 +2233,30 @@ label_OP_return:
     TValue ret = __none_value();
     gInterSource->InsertEplog();
     TVALUEBITMASK(ret); // If returning void, it is set to {0x0, PTY_void}
+    func.pc = func_pc;
+    func.sp = func_sp;
     return ret;
   }
 
 label_OP_rangegoto:
   {
     // Handle statement node: rangegoto
-    mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func.pc));
+    mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func_pc));
     DEBUGOPCODE(rangegoto, Stmt);
-    int32_t adjusted = *(int32_t*)(func.pc + sizeof(mre_instr_t));
+    int32_t adjusted = *(int32_t*)(func_pc + sizeof(mre_instr_t));
     TValue &val = MPOP();
     int32_t idx = val.x.i32 - adjusted;
     MASSERT(idx < stmt.param.numCases, "Out of range: index = %d, numCases = %d", idx, stmt.param.numCases);
-    func.pc += sizeof(mre_instr_t) + sizeof(int32_t) + idx * 4;
-    func.pc += *(int32_t*)func.pc;
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(mre_instr_t) + sizeof(int32_t) + idx * 4;
+    func_pc += *(int32_t*)func_pc;
+    goto *(labels[*func_pc]);
   }
 
 label_OP_call:
   {
     // Handle statement node: call
-    // call_stmt_t &stmt = *(reinterpret_cast<call_stmt_t *>(func.pc));
-    mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func.pc));
+    // call_stmt_t &stmt = *(reinterpret_cast<call_stmt_t *>(func_pc));
+    mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func_pc));
     DEBUGOPCODE(call, Stmt);
     // get the parameters
     TValue args[MAXCALLARGNUM];
@@ -2179,24 +2273,26 @@ label_OP_call:
     gInterSource->sp += offset;
     // TValue this_arg = MvalToJsval(thisVal);
     // TValue old_this = __js_entry_function(&this_arg, false);
-    constval_node_t &expr = *(reinterpret_cast<constval_node_t *>(func.pc));
+    constval_node_t &expr = *(reinterpret_cast<constval_node_t *>(func_pc));
     //(call, Stmt);
     TValue val;
     DynamicMethodHeaderT* calleeHeader = (DynamicMethodHeaderT*)((uint8_t*)expr.constVal.value + 4);
+    func.pc = func_pc;
+    func.sp = func_sp;
     val = maple_invoke_dynamic_method (calleeHeader, nullptr);
     // __js_exit_function(&this_arg, old_this, false);
     gInterSource->sp -= offset;
     gInterSource->SetCurFunc(&func);
-    // func.direct_call(stmt.primType, stmt.numOpnds, func.pc);
+    // func.direct_call(stmt.primType, stmt.numOpnds, func_pc);
 
     // Skip the function name
-    func.pc += sizeof(constval_node_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(constval_node_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_icall:
   {
-    mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func.pc));
+    mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func_pc));
     DEBUGOPCODE(icall, Stmt);
     // get the parameters
     TValue args[MAXCALLARGNUM];
@@ -2212,24 +2308,26 @@ label_OP_icall:
     if (IS_NONE(retCall.x.u64) && GET_PAYLOAD(retCall) == (uint64_t) Exec_handle_exc) {
       void *newPc = gInterSource->currEH->GetEHpc(&func);
       if (newPc) {
-        func.pc = (uint8_t *)newPc;
-        goto *(labels[*func.pc]);
+        func_pc = (uint8_t *)newPc;
+        goto *(labels[*func_pc]);
       }
       gInterSource->InsertEplog();
       // gInterSource->FinishFunc();
       //return retCall; // continue to unwind
+      func.pc = func_pc;
+      func.sp = func_sp;
       return retCall;
     } else {
       // the first is the addr of callee, the second is to be ignore
-      func.pc += sizeof(mre_instr_t);
-      goto *(labels[*func.pc]);
+      func_pc += sizeof(mre_instr_t);
+      goto *(labels[*func_pc]);
     }
   }
 
 label_OP_intrinsiccall:
   {
     // Handle statement node: intrinsiccall
-    mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func.pc));
+    mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func_pc));
     uint32_t numOpnds = stmt.param.intrinsic.numOpnds;
     DEBUGCOPCODE(intrinsiccall, Stmt);
     MIRIntrinsicID intrnid = (MIRIntrinsicID)stmt.param.intrinsic.intrinsicId;
@@ -2460,7 +2558,7 @@ label_OP_intrinsiccall:
           nl_u64 = reinterpret_cast<uint8_t *>(&nl);
         }
         for (uint32_t i = 0; i < numOpnds; i++) {
-          TValue mval = func.operand_stack[func.sp - numOpnds + i + 1];
+          TValue mval = func_operand_stack[func_sp - numOpnds + i + 1];
           gInterSource->JSPrint(mval);
           if (i != numOpnds-1) {
             // insert space between printed arguments
@@ -2468,7 +2566,7 @@ label_OP_intrinsiccall:
           }
         }
         // pop arguments of JS_print
-        func.sp -= numOpnds;
+        func_sp -= numOpnds;
         // insert CR/LF at EOL
         gInterSource->JSPrint(__string_value((__jsstring*)nl_u64));
         // gInterSource->retVal0.x.u64 = 0;
@@ -2641,6 +2739,8 @@ label_OP_intrinsiccall:
           } else if (!strcmp(estr, "ReferenceError")) {
             m = gInterSource->GetOrCreateBuiltinObj(JSBUILTIN_REFERENCEERRORCONSTRUCTOR);
             isRefError = true;
+          } else if (!strcmp(estr, "callee exception")) { // exception is thrown by user code
+            // do nothing because the exception object is already in gInterSource
           } else {
             m = (__string_value(__jsstr_new_from_char(estr)));
           }
@@ -2661,7 +2761,7 @@ label_OP_intrinsiccall:
             exit(3);
           }
 
-          if (isTypeError || isRangeError || isSyntaxError || isUriError || GET_PAYLOAD(gInterSource->currEH->GetThrownval()) == 0) {
+          if (isTypeError || isRangeError || isSyntaxError || isUriError || GET_PAYLOAD(gInterSource->currEH->GetThrownval()) == 0) { // ToDo: GetThrownval() == 0 is wrong
             gInterSource->currEH->SetThrownval(m);
           }
           gInterSource->currEH->UpdateState(OP_throw);
@@ -2709,15 +2809,17 @@ label_OP_intrinsiccall:
     }
     if (isEhHappend) {
       if (newPc) {
-         func.pc = (uint8_t *)newPc;
+         func_pc = (uint8_t *)newPc;
          goto *(labels[*(uint8_t *)newPc]);
       } else {
          gInterSource->InsertEplog();
+         func.pc = func_pc;
+         func.sp = func_sp;
          return __none_value(Exec_handle_exc);
       }
     } else {
-      func.pc += sizeof(mre_instr_t);
-      goto *(labels[*func.pc]);
+      func_pc += sizeof(mre_instr_t);
+      goto *(labels[*func_pc]);
     }
   }
 
@@ -2725,18 +2827,18 @@ label_OP_javatry:
   {
     // Handle statement node: javatry
     MIR_FATAL("Error: hit OP_javacatch unexpectedly");
-    mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func.pc));
+    mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func_pc));
     DEBUGOPCODE(javatry, Stmt);
 
-    // func.try_catch_pc = func.pc;
+    // func.try_catch_pc = func_pc;
     // Skips the try-catch table
-    func.pc += stmt.param.numCases * 4 + sizeof(mre_instr_t);
-    goto *(labels[*func.pc]);
+    func_pc += stmt.param.numCases * 4 + sizeof(mre_instr_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_throw:
   {
-    mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func.pc));
+    mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func_pc));
     DEBUGOPCODE(throw, Stmt);
     //MIR_ASSERT(gInterSource->currEH);
     TValue &m = MPOP();
@@ -2752,11 +2854,13 @@ label_OP_throw:
     gInterSource->currEH->UpdateState(OP_throw);
     void *newPc = gInterSource->currEH->GetEHpc(&func);
     if (newPc) {
-      func.pc = (uint8_t *)newPc;
+      func_pc = (uint8_t *)newPc;
       goto *(labels[*(uint8_t *)newPc]);
     } else {
       gInterSource->InsertEplog();
       // gInterSource->FinishFunc();
+      func.pc = func_pc;
+      func.sp = func_sp;
       return __none_value(Exec_handle_exc);
     }
   }
@@ -2768,28 +2872,28 @@ label_OP_javacatch:
     // OP_javacatch is handled at label_exception_handler
     MASSERT(true, "Hit OP_javacatch unexpectedly");
     MIR_FATAL("Error: hit OP_javacatch unexpectedly");
-    //func.pc += stmt.param.numCases * 4 + sizeof(mre_instr_t);
-    //goto *(labels[*func.pc]);
+    //func_pc += stmt.param.numCases * 4 + sizeof(mre_instr_t);
+    //goto *(labels[*func_pc]);
   }
 
 label_OP_cleanuptry:
 {
     DEBUGOPCODE(cleanuptry, Stmt);
-    goto_stmt_t &stmt = *(reinterpret_cast<goto_stmt_t *>(func.pc));
+    goto_stmt_t &stmt = *(reinterpret_cast<goto_stmt_t *>(func_pc));
     gInterSource->currEH->FreeEH();
-    func.pc += sizeof(base_node_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(base_node_t);
+    goto *(labels[*func_pc]);
 }
 label_OP_endtry:
   {
     // Handle statement node: endtry
     DEBUGOPCODE(endtry, Stmt);
     // func.try_catch_pc = nullptr;
-    // mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func.pc));
-    goto_stmt_t &stmt = *(reinterpret_cast<goto_stmt_t *>(func.pc));
+    // mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func_pc));
+    goto_stmt_t &stmt = *(reinterpret_cast<goto_stmt_t *>(func_pc));
     gInterSource->currEH->FreeEH();
-    func.pc += sizeof(base_node_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(base_node_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_membaracquire:
@@ -2798,8 +2902,8 @@ label_OP_membaracquire:
     //(membaracquire, Stmt);
     // Every load on X86_64 implies load acquire semantics
     DEBUGOPCODE(membaracquire, Stmt);
-    func.pc += sizeof(base_node_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(base_node_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_membarrelease:
@@ -2807,8 +2911,8 @@ label_OP_membarrelease:
     // Handle statement node: membarrelease
     DEBUGOPCODE(membarrelease, Stmt);
     // Every store on X86_64 implies store release semantics
-    func.pc += sizeof(base_node_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(base_node_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_membarstoreload:
@@ -2816,8 +2920,8 @@ label_OP_membarstoreload:
     // Handle statement node: membarstoreload
     DEBUGOPCODE(membarstoreload, Stmt);
     // X86_64 has strong memory model
-    func.pc += sizeof(base_node_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(base_node_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_membarstorestore:
@@ -2825,8 +2929,8 @@ label_OP_membarstorestore:
     // Handle statement node: membarstorestore
     DEBUGOPCODE(membarstorestore, Stmt);
     // X86_64 has strong memory model
-    func.pc += sizeof(base_node_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(base_node_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_iassignpcoff:
@@ -2834,8 +2938,8 @@ label_OP_iassignpcoff:
     // Handle statement node: iassignpcoff
     DEBUGOPCODE(iassignpcoff, Stmt);
     MASSERT(false, "Not supported yet");
-    func.pc += sizeof(base_node_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(base_node_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_checkpoint:
@@ -2843,8 +2947,8 @@ label_OP_checkpoint:
     // Handle statement node: checkpoint
     DEBUGOPCODE(checkpoint, Stmt);
     // MRT_YieldpointHandler_x86_64();
-    func.pc += sizeof(base_node_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(base_node_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_iaddrof:
@@ -2852,8 +2956,8 @@ label_OP_iaddrof:
     // Handle expression node: iaddrof
     DEBUGOPCODE(iaddrof, Expr);
     MASSERT(false, "Not supported yet");
-    func.pc += sizeof(iread_node_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(iread_node_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_array:
@@ -2861,14 +2965,14 @@ label_OP_array:
     // Handle expression node: array
     DEBUGOPCODE(array, Expr);
     MASSERT(false, "Not supported yet");
-    func.pc += sizeof(array_node_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(array_node_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_ireadfpoff: // offset from stack frame
   {
     // Handle expression node: ireadfpoff
-    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func.pc));
+    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func_pc));
     DEBUGOPCODE(ireadfpoff, Expr);
     int32_t offset = (int32_t)expr.param.offset;
     uint8 *addr = frame_pointer + offset;
@@ -2912,8 +3016,8 @@ label_OP_ireadfpoff: // offset from stack frame
     }
     MPUSH(val);
 
-    func.pc += sizeof(mre_instr_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(mre_instr_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_addroflabel:
@@ -2921,8 +3025,8 @@ label_OP_addroflabel:
     // Handle expression node: addroflabel
     DEBUGOPCODE(addroflabel, Expr);
     MASSERT(false, "Not supported yet");
-    func.pc += sizeof(addroflabel_node_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(addroflabel_node_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_ceil:
@@ -2930,8 +3034,8 @@ label_OP_ceil:
     // Handle expression node: ceil
     DEBUGOPCODE(ceil, Expr);
     MASSERT(false, "Not supported yet");
-    func.pc += sizeof(mre_instr_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(mre_instr_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_floor:
@@ -2939,8 +3043,8 @@ label_OP_floor:
     // Handle expression node: floor
     DEBUGOPCODE(floor, Expr);
     MASSERT(false, "Not supported yet");
-    func.pc += sizeof(mre_instr_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(mre_instr_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_round:
@@ -2948,8 +3052,8 @@ label_OP_round:
     // Handle expression node: round
     DEBUGOPCODE(round, Expr);
     MASSERT(false, "Not supported yet");
-    func.pc += sizeof(mre_instr_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(mre_instr_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_trunc:
@@ -2957,35 +3061,35 @@ label_OP_trunc:
     // Handle expression node: trunc
     DEBUGOPCODE(trunc, Expr);
     MASSERT(false, "Not supported yet");
-    func.pc += sizeof(mre_instr_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(mre_instr_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_abs:
   {
     // Handle expression node: abs
     DEBUGOPCODE(abs, Expr);
-    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func.pc));
+    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func_pc));
     JSUNARY();
-    func.pc += sizeof(mre_instr_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(mre_instr_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_recip:
   {
     // Handle expression node: recip
     DEBUGOPCODE(recip, Expr);
-    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func.pc));
+    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func_pc));
     JSUNARY();
-    func.pc += sizeof(mre_instr_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(mre_instr_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_lnot:
   {
     // Handle expression node: neg
     DEBUGOPCODE(lnot, Expr);
-    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func.pc));
+    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func_pc));
     TValue &mv0 = MPOP();
     CHECKREFERENCEMVALUE(mv0);
     bool isEhHappend = false;
@@ -3000,7 +3104,7 @@ label_OP_bnot:
   {
     // Handle expression node: neg
     DEBUGOPCODE(bnot, Expr);
-    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func.pc));
+    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func_pc));
     TValue &mv0 = MPOP();
     CHECKREFERENCEMVALUE(mv0);
     bool isEhHappend = false;
@@ -3015,7 +3119,7 @@ label_OP_neg:
   {
     // Handle expression node: neg
     DEBUGOPCODE(neg, Expr);
-    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func.pc));
+    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func_pc));
     TValue &mv0 = MPOP();
     CHECKREFERENCEMVALUE(mv0);
     bool isEhHappend = false;
@@ -3031,10 +3135,10 @@ label_OP_sqrt:
   {
     // Handle expression node: sqrt
     DEBUGOPCODE(sqrt, Expr);
-    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func.pc));
+    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func_pc));
     JSUNARY();
-    func.pc += sizeof(mre_instr_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(mre_instr_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_alloca:
@@ -3042,8 +3146,8 @@ label_OP_alloca:
     // Handle expression node: alloca
     DEBUGOPCODE(alloca, Expr);
     MASSERT(false, "Not supported yet");
-    func.pc += sizeof(unary_node_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(unary_node_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_malloc:
@@ -3051,8 +3155,8 @@ label_OP_malloc:
     // Handle expression node: malloc
     DEBUGOPCODE(malloc, Expr);
     MASSERT(false, "Not supported yet");
-    func.pc += sizeof(unary_node_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(unary_node_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_gcmalloc:
@@ -3060,8 +3164,8 @@ label_OP_gcmalloc:
     // Handle expression node: gcmalloc
     DEBUGOPCODE(gcmalloc, Expr);
     MASSERT(false, "Not supported yet");
-    func.pc += sizeof(unary_node_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(unary_node_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_gcpermalloc:
@@ -3069,8 +3173,8 @@ label_OP_gcpermalloc:
     // Handle expression node: gcpermalloc
     DEBUGOPCODE(gcpermalloc, Expr);
     MASSERT(false, "Not supported yet");
-    func.pc += sizeof(unary_node_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(unary_node_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_stackmalloc:
@@ -3078,8 +3182,8 @@ label_OP_stackmalloc:
     // Handle expression node: stackmalloc
     DEBUGOPCODE(stackmalloc, Expr);
     MASSERT(false, "Not supported yet");
-    func.pc += sizeof(unary_node_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(unary_node_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_gcmallocjarray:
@@ -3087,15 +3191,15 @@ label_OP_gcmallocjarray:
     // Handle expression node: gcmallocjarray
     DEBUGOPCODE(gcmallocjarray, Expr);
     MASSERT(false, "Not supported yet");
-    func.pc += sizeof(jarraymalloc_node_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(jarraymalloc_node_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_intrinsicop:
   {
     // Handle expression node: intrinsicop
     //(intrinsicop, Expr);
-    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func.pc));
+    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func_pc));
     uint32_t numOpnds = expr.param.intrinsic.numOpnds;
     TValue retMv;
     DEBUGOPCODE(intrinsicop, Stmt);
@@ -3178,8 +3282,8 @@ label_OP_intrinsicop:
            //MIR_ASSERT(argnums == 1);
            TValue &op0 = MTOP();
            if (IS_BOOLEAN(op0.x.u64)) {
-             func.pc += sizeof(mre_instr_t);
-             goto *(labels[*func.pc]);
+             func_pc += sizeof(mre_instr_t);
+             goto *(labels[*func_pc]);
            } else {
              TValue &v0 = MPOP();
              CHECKREFERENCEMVALUE(v0);
@@ -3191,8 +3295,8 @@ label_OP_intrinsicop:
            //MIR_ASSERT(argnums == 1);
            TValue &op0 = MTOP();
            if (IS_NUMBER(op0.x.u64) || IS_DOUBLE(op0.x.u64)) {
-             func.pc += sizeof(mre_instr_t);
-             goto *(labels[*func.pc]);
+             func_pc += sizeof(mre_instr_t);
+             goto *(labels[*func_pc]);
            } else {
              TValue &v0 = MPOP();
              CHECKREFERENCEMVALUE(v0);
@@ -3270,17 +3374,19 @@ label_OP_intrinsicop:
       }
     if (isEhHappend) {
       if (newPc) {
-         func.pc = (uint8_t *)newPc;
+         func_pc = (uint8_t *)newPc;
          goto *(labels[*(uint8_t *)newPc]);
       } else {
          gInterSource->InsertEplog();
             // gInterSource->FinishFunc();
+         func.pc = func_pc;
+         func.sp = func_sp;
          return __none_value(Exec_handle_exc);
       }
     } else {
       MPUSH(retMv);
-      func.pc += sizeof(mre_instr_t);
-      goto *(labels[*func.pc]);
+      func_pc += sizeof(mre_instr_t);
+      goto *(labels[*func_pc]);
     }
   }
 
@@ -3289,8 +3395,8 @@ label_OP_depositbits:
     // Handle expression node: depositbits
     DEBUGOPCODE(depositbits, Expr);
     MASSERT(false, "Not supported yet");
-    func.pc += sizeof(binary_node_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(binary_node_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_free:
@@ -3298,15 +3404,15 @@ label_OP_free:
     // Handle statement node: free
     DEBUGOPCODE(free, Stmt);
     MASSERT(false, "Not supported yet");
-    func.pc += sizeof(base_node_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(base_node_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_iassignfpoff:
   {
     // Handle statement node: iassignfpoff
     DEBUGOPCODE(iassignfpoff, Stmt);
-    mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func.pc));
+    mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func_pc));
     TValue &rVal = MPOP();
     int32_t offset = (int32_t)stmt.param.offset;
     uint8 *addr = frame_pointer + offset;
@@ -3366,8 +3472,8 @@ label_OP_iassignfpoff:
       break;
       }
     }
-    func.pc += sizeof(base_node_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(base_node_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_xintrinsiccall:
@@ -3375,8 +3481,8 @@ label_OP_xintrinsiccall:
     // Handle statement node: xintrinsiccall
     DEBUGOPCODE(xintrinsiccall, Stmt);
     MASSERT(false, "Not supported yet");
-    func.pc += sizeof(intrinsiccall_stmt_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(intrinsiccall_stmt_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_callassigned:
@@ -3384,8 +3490,8 @@ label_OP_callassigned:
     // Handle statement node: callassigned
     DEBUGOPCODE(callassigned, Stmt);
     MASSERT(false, "Not supported yet");
-    func.pc += sizeof(callassigned_stmt_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(callassigned_stmt_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_icallassigned:
@@ -3393,8 +3499,8 @@ label_OP_icallassigned:
     // Handle statement node: icallassigned
     DEBUGOPCODE(icallassigned, Stmt);
     MASSERT(false, "Not supported yet");
-    func.pc += sizeof(icallassigned_stmt_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(icallassigned_stmt_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_intrinsiccallassigned:
@@ -3402,37 +3508,39 @@ label_OP_intrinsiccallassigned:
     // Handle statement node: intrinsiccallassigned
     DEBUGOPCODE(intrinsiccallassigned, Stmt);
     MASSERT(false, "Not supported yet");
-    func.pc += sizeof(intrinsiccallassigned_stmt_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(intrinsiccallassigned_stmt_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_gosub:
   {
     // Handle statement node: gosub
     DEBUGOPCODE(gosub, Stmt);
-    goto_stmt_t &stmt = *(reinterpret_cast<goto_stmt_t *>(func.pc));
-    func.pc += sizeof(goto_stmt_t);
-    gInterSource->currEH->PushGosub((void *)func.pc);
-    func.pc = (uint8_t*)&stmt.offset + stmt.offset;
-    goto *(labels[*func.pc]);
+    goto_stmt_t &stmt = *(reinterpret_cast<goto_stmt_t *>(func_pc));
+    func_pc += sizeof(goto_stmt_t);
+    gInterSource->currEH->PushGosub((void *)func_pc);
+    func_pc = (uint8_t*)&stmt.offset + stmt.offset;
+    goto *(labels[*func_pc]);
   }
 
 label_OP_retsub:
   {
     // Handle statement node: retsub
     DEBUGOPCODE(retsub, Stmt);
-    base_node_t &expr = *(reinterpret_cast<base_node_t *>(func.pc));
+    base_node_t &expr = *(reinterpret_cast<base_node_t *>(func_pc));
     if (gInterSource->currEH->IsRaised()) {
-      func.pc = (uint8_t *)gInterSource->currEH->GetEHpc(&func);
-      if (!func.pc) {
+      func_pc = (uint8_t *)gInterSource->currEH->GetEHpc(&func);
+      if (!func_pc) {
         gInterSource->InsertEplog();
         // gInterSource->FinishFunc();
+        func.pc = func_pc;
+        func.sp = func_sp;
         return __none_value(Exec_handle_exc);
       }
     } else {
-      func.pc = (uint8_t *)gInterSource->currEH->PopGosub();
+      func_pc = (uint8_t *)gInterSource->currEH->PopGosub();
     }
-    goto *(labels[*func.pc]);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_syncenter:
@@ -3440,8 +3548,8 @@ label_OP_syncenter:
     // Handle statement node: syncenter
     DEBUGOPCODE(syncenter, Stmt);
     MASSERT(false, "Not supported yet");
-    func.pc += sizeof(base_node_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(base_node_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_syncexit:
@@ -3449,8 +3557,8 @@ label_OP_syncexit:
     // Handle statement node: syncexit
     DEBUGOPCODE(syncexit, Stmt);
     MASSERT(false, "Not supported yet");
-    func.pc += sizeof(base_node_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(base_node_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_comment:
@@ -3659,7 +3767,7 @@ label_OP_try:
     MASSERT(false, "Not supported yet");
 
 label_OP_jstry: {
-    uint8_t *curPc = func.pc;
+    uint8_t *curPc = func_pc;
     mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(curPc));
     DEBUGOPCODE(jstry, Stmt);
     // constval_node_t &catchCon = *(reinterpret_cast<constval_node_t *>(curPc + sizeof(mre_instr_t)));
@@ -3670,8 +3778,8 @@ label_OP_jstry: {
     catchV = (catchVoff == 0 ? nullptr : (curPc + sizeof(mre_instr_t) + catchVoff));
     finaV = (finaVoff == 0 ? nullptr : (curPc + sizeof(mre_instr_t) + 4 + finaVoff));
     gInterSource->JsTry(curPc, catchV, finaV, &func);
-    func.pc += sizeof(mre_instr_t) + 8;
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(mre_instr_t) + 8;
+    goto *(labels[*func_pc]);
 }
 
 label_OP_catch:
@@ -3680,19 +3788,19 @@ label_OP_catch:
     MASSERT(false, "Not supported yet");
 
 label_OP_jscatch: {
-    mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func.pc));
+    mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func_pc));
     DEBUGOPCODE(jscatch, Stmt);
     gInterSource->currEH->UpdateState(OP_jscatch);
-    func.pc += sizeof(mre_instr_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(mre_instr_t);
+    goto *(labels[*func_pc]);
 }
 
 label_OP_finally: {
-    mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func.pc));
+    mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func_pc));
     DEBUGOPCODE(finally, Stmt);
     gInterSource->currEH->UpdateState(OP_finally);
-    func.pc += sizeof(mre_instr_t);
-    goto *(labels[*func.pc]);
+    func_pc += sizeof(mre_instr_t);
+    goto *(labels[*func_pc]);
 }
 label_OP_decref:
     // Not supported yet: decref

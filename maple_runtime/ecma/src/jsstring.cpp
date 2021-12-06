@@ -480,6 +480,8 @@ TValue __jsstr_concat(TValue &this_string, TValue *arr, uint32_t size) {
     if (i != 0)
       memory_manager->RecallString(s[i]);
   }
+  if (__is_string(this_string) == false)
+    memory_manager->RecallString(s[0]);
   return __string_value(str);
 }
 
@@ -695,6 +697,7 @@ static inline void __jsstr_get_regexp_patten(std::wregex &pattern, TValue &regex
 // Ecma 15.5.4.14 SplitMatch
 bool __jsstr_splitMatch(__jsstring *s, uint32_t *q, TValue &separator, uint32_t *ret) {
   __jsstring *r = NULL;
+  bool tmpStr4r = false; // track if a temp string is created for r
   // step 1:
   if (__is_js_object(separator)) {
     __jsobject *obj = __jsval_to_object(separator);
@@ -731,6 +734,7 @@ bool __jsstr_splitMatch(__jsstring *s, uint32_t *q, TValue &separator, uint32_t 
     }
   } else {
     r = __js_ToString(separator);
+    tmpStr4r = true;
   }
   uint32_t rl = __jsstr_get_length(r);
   // step 3:
@@ -746,6 +750,8 @@ bool __jsstr_splitMatch(__jsstring *s, uint32_t *q, TValue &separator, uint32_t 
       return false;
     }
   }
+  if (tmpStr4r)
+    memory_manager->RecallString(r);
   *ret = *q + rl;
   return true;
 }
@@ -773,13 +779,18 @@ TValue __jsstr_split(TValue &this_string, TValue &separator, TValue &limit) {
   uint32_t p = 0;
   // step 8:
   // step 9:
-  if (lim == 0)
+  if (lim == 0) {
+    if (__is_string(this_string) == false)
+      memory_manager->RecallString(s);
     return __object_value(a);
+  }
   // step 10:
   TValue v = __string_value(s);
   TValue nv = __number_value(0);
   if (__is_undefined(separator)) {
     __jsobj_helper_add_value_property(a, __js_ToString(nv), v, JSPROP_DESC_HAS_VWEC);
+    if (__is_string(this_string) == false)
+      memory_manager->RecallString(s);
     return __object_value(a);
   }
   // step 11:
@@ -788,6 +799,8 @@ TValue __jsstr_split(TValue &this_string, TValue &separator, TValue &limit) {
   if (sl == 0) {
     if (!__jsstr_splitMatch(s, &q, separator, &e))
       __jsobj_helper_add_value_property(a, __js_ToString(nv), v, JSPROP_DESC_HAS_VWEC);
+    if (__is_string(this_string) == false)
+      memory_manager->RecallString(s);
     return __object_value(a);
   }
   // step 12:
@@ -821,8 +834,11 @@ TValue __jsstr_split(TValue &this_string, TValue &separator, TValue &limit) {
         // step 13.c.iii.3
         __jsobj_helper_set_length(a, ++n, true);
         // step 13.c.iii.4
-        if (n == lim)
+        if (n == lim) {
+          if (__is_string(this_string) == false)
+            memory_manager->RecallString(s);
           return __object_value(a);
+        }
         // step 13.c.iii.5
         p = e;
         // step 13.c.iii.6
@@ -847,6 +863,10 @@ TValue __jsstr_split(TValue &this_string, TValue &separator, TValue &limit) {
     memory_manager->RecallString(nvStr);
     __jsobj_helper_set_length(a, ++n, true);
   }
+
+  if (__is_string(this_string) == false)
+    memory_manager->RecallString(s);
+
   // step 16:
   return __object_value(a);
 }
@@ -895,6 +915,8 @@ TValue __jsstr_substring(TValue &this_string, TValue &start, TValue &end) {
   // step 10:
   uint32_t span = to - from;
   __jsstring *str = __jsstr_extract(s, from, span);
+  if (str != s && __is_string(this_string) == false)
+    memory_manager->RecallString(s);
   return __string_value(str);
 }
 

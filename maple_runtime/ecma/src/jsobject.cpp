@@ -478,6 +478,7 @@ __jsprop *__add_builtin_value_property(__jsbuiltin_string_id id, __jsbuiltin_obj
       case JSBUILTIN_TYPEERROR_CONSTRUCTOR:
       case JSBUILTIN_NUMBERCONSTRUCTOR:
       case JSBUILTIN_REFERENCEERRORCONSTRUCTOR:
+      case JSBUILTIN_EVALERROR_CONSTRUCTOR:
           attrs = JSPROP_DESC_HAS_VWUEC;
           break;
       case JSBUILTIN_REGEXPPROTOTYPE:

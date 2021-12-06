@@ -51,6 +51,7 @@ TValue __jsfun_pt_apply(TValue &function, TValue &this_arg, TValue &arg_array);
 // ecma 15.3.4.4
 TValue __jsfun_pt_call(TValue &function, TValue *args, uint32_t arg_count);
 // ecma 15.3.4.5
+TValue __jsfun_pt_bind_(TValue &function, TValue *args, uint32_t arg_count, bool create_function = true);
 TValue __jsfun_pt_bind(TValue &function, TValue *args, uint32_t arg_count);
 bool __jsfun_internal_HasInstance(__jsobject *f, TValue &v);
 bool __js_Impl_HasInstance(TValue &v);

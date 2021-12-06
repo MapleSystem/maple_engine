@@ -341,6 +341,10 @@ TValue __jsfun_pt_call(TValue &function, TValue *args, uint32_t arg_count) {
 
 // ecma 15.3.4.5
 TValue __jsfun_pt_bind(TValue &function, TValue *args, uint32_t arg_count) {
+  return __jsfun_pt_bind_(function, args, arg_count, true);
+}
+
+TValue __jsfun_pt_bind_(TValue &function, TValue *args, uint32_t arg_count, bool create_function) {
   // ecma 15.3.4.5 step 1.
   TValue target = __js_ThisBinding;
   // ecma 15.3.4.5 step 2.
@@ -371,9 +375,13 @@ TValue __jsfun_pt_bind(TValue &function, TValue *args, uint32_t arg_count) {
     }
   }
   TValue len_val = __number_value(len);
-  attr = attr | (len << 8);
-  __jsobject *f = __create_function((void *)__jsval_to_object(target), (void *)bound_args, attr, -1);
-
+  __jsobject *f;
+  if (create_function) {
+    attr = attr | (len << 8);
+    f = __create_function((void *)__jsval_to_object(target), (void *)bound_args, attr, -1);
+  } else {
+    f = __jsval_to_object(target);
+  }
   // ecma 15.3.4.5 step 17.
   __jsobj_helper_init_value_property(f, JSBUILTIN_STRING_LENGTH, len_val, JSPROP_DESC_HAS_VUWUEC);
   // ecma 15.3.4.5 step 22....

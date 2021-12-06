@@ -491,8 +491,21 @@ void CheckAndSetFlagOptions(__jsstring *s, __jsstring *js_pattern,
     return;
   }
   const char undefined[] = "undefined";
-  __jsstring *js_undefined = __jsstr_new_from_char(undefined);
-  if (__jsstr_equal(s, js_undefined)) {
+  //__jsstring *js_undefined = __jsstr_new_from_char(undefined);
+  //if (__jsstr_equal(s, js_undefined)) {
+  // compare __jsstring to a const ascii string; no need to create a tmp __jsstring.
+  bool s_is_undefined = false;  // ToDo: if this type of comparison occurs often, create a function
+  if (__jsstr_get_length(s) == 9) {
+    s_is_undefined = true;
+    for (int i=0; i<9; i++) {
+      if ((uint16_t)undefined[i] != __jsstr_get_char(s, i)) {
+        s_is_undefined = false;
+        break;
+      }
+    }
+  }
+
+  if (s_is_undefined) {
     if (__jsstr_get_length(js_pattern) == 0) {
       js_pattern = __jsstr_new_from_char(DEFAULT_REGEXP_PATTERN);
     }
