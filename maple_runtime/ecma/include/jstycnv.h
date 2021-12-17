@@ -90,6 +90,16 @@ static inline __jsstring *__js_ToString(TValue &v) {
   return __js_ToStringSlow(v);
 }
 
+// Dec 06, 2021 - new toString functions
+__jsstring *__js_ToStringSlow(TValue &v, bool& newlyCreated);
+static inline __jsstring *__js_ToString(TValue &v, bool& newlyCreated) {
+  if (__is_string(v)) {
+    newlyCreated = false;
+    return __jsval_to_string(v);
+  }
+  return __js_ToStringSlow(v, newlyCreated);
+}
+
 // ecma 9.9
 __jsobject *__js_ToObject(TValue &v);
 // ecma 9.10

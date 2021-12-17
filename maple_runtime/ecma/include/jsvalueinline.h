@@ -216,12 +216,14 @@ static inline TValue __boolean_value(bool b) {
   return (TValue){.x.u64 = NAN_BOOLEAN | (uint64_t)b};
 }
 
+#define __number_value(i) (TValue){.x.u64 = ((uint64_t)(i) & 0x00000000ffffffff) | NAN_NUMBER}
+/*
 static inline TValue __number_value(int32_t i) {
   TValue v = {.x.u64 = NAN_NUMBER};
   v.x.i32 = i;
   return v;
 }
-
+*/
 static inline TValue __number_infinity() {
   return (TValue){.x.u64 = NAN_INFINITY};
 }

@@ -1534,7 +1534,7 @@ const char *Months[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", 
 TValue InterSource::JSDate(uint32_t nargs, TValue *args) {
   //TODO: Handle return string correctly.
   char charray[64] = "";
-  __jsstring *jsstr = __jsstr_new_from_char(charray);
+  //__jsstring *jsstr = __jsstr_new_from_char(charray);
   TValue res;
 
   TValue now = __jsdate_Now();

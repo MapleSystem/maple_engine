@@ -288,7 +288,7 @@ TValue __jsobj_internal_Get(__jsobject *o, uint32_t index);
 // ecma 8.12.4
 bool __jsobj_internal_CanPut(__jsobject *o, TValue *p, bool isStrict = false, __jsprop **prop_cache = NULL);
 // ecma 8.12.5
-void __jsobj_internal_Put(__jsobject *o, __jsstring *p, TValue &v, bool throw_p, bool isStrict = false);
+bool __jsobj_internal_Put(__jsobject *o, __jsstring *p, TValue &v, bool throw_p, bool isStrict = false);
 void __jsobj_internal_Put(__jsobject *o, uint32_t index, TValue &v, bool throw_p);
 // ecma 8.12.6
 // ecma 8.12.6
@@ -344,8 +344,7 @@ TValue __jsobj_pt_isPrototypeOf(TValue &this_object, TValue &v);
 TValue __jsobj_pt_propertyIsEnumerable(TValue &this_object, TValue &v);
 void __jsop_initprop_by_name(TValue &o, __jsstring *p, TValue &v);
 void __jsop_initprop(TValue &o, TValue &p, TValue &v);
-void __jsop_setprop(TValue &object, TValue &prop_name, TValue &v);
-void __jsop_setprop(maple::TValue &object, maple::TValue &prop_name, maple::TValue &v);
+bool __jsop_setprop(TValue &object, TValue &prop_name, TValue &v);
 void __jsop_initprop_getter(TValue &object, TValue &prop_name, TValue &v);
 TValue __jsop_getprop(TValue *object, TValue *prop_name);
 TValue __jsop_getprop(maple::TValue &object, maple::TValue &prop_name);
@@ -361,7 +360,7 @@ void __jsobj_initprop_fromString(__jsobject *obj, __jsstring *str);
 __jsprop *__jsobj_helper_init_value_propertyByValue(__jsobject *, uint32_t, TValue &, uint32_t);
 TValue __jsobj_GetValueFromPropertyByValue(__jsobject *, uint32_t);
 bool __jsPropertyIsWritable(__jsobject *, uint32_t);
-void __jsconsole_pt_log (TValue &, TValue &);
+void __jsconsole_pt_log (TValue &, TValue *, uint32_t);
 TValue __jsobj_internal_get_by_desc(__jsobject *obj, __jsprop_desc desc, TValue *orgVal = NULL);
 __jsprop_desc __jsobj_internal_GetOwnPropertyByValue(__jsobject *o, uint32_t index);
 #endif

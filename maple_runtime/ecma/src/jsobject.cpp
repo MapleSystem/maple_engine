@@ -928,7 +928,7 @@ __jsprop *__create_builtin_property(__jsobject *obj, __jsstring *name) {
       break;
     case JSBUILTIN_INTL_COLLATOR_PROTOTYPE:
       ADD_VALUE_PROPERTY(JSBUILTIN_STRING_CONSTRUCTOR, (JSBUILTIN_INTL_COLLATOR_CONSTRUCTOR));
-      ADD_ACCESSOR_PROPERTY(JSBUILTIN_STRING_COMPARE, JSBUILTIN_INTL_COLLATOR_PROTOTYPE, __jsintl_CollatorCompare, ATTRS(2, 0), NULL, ATTRS(0, 0), JSPROP_DESC_HAS_UVUWUEC);
+      ADD_FUNCTION_PROPERTY(JSBUILTIN_STRING_COMPARE, __jsintl_CollatorCompare, ATTRS(2,1));
       ADD_FUNCTION_PROPERTY(JSBUILTIN_STRING_RESOLVED_OPTIONS, __jsintl_CollatorResolvedOptions, ATTRS(0, 0));
       break;
     case JSBUILTIN_INTL_NUMBERFORMAT_CONSTRUCTOR:
@@ -950,7 +950,7 @@ __jsprop *__create_builtin_property(__jsobject *obj, __jsstring *name) {
       ADD_FUNCTION_PROPERTY(JSBUILTIN_STRING_RESOLVED_OPTIONS, __jsintl_DateTimeFormatResolvedOptions, ATTRS(0, 0));
       break;
     case JSBUILTIN_CONSOLE:
-      ADD_FUNCTION_PROPERTY(JSBUILTIN_STRING_LOG, __jsconsole_pt_log, ATTRS(1, 1));
+      ADD_FUNCTION_PROPERTY(JSBUILTIN_STRING_LOG, __jsconsole_pt_log, ATTRS(UNCERTAIN_NARGS, 2));
       break;
     case JSBUILTIN_ARRAYBUFFER_CONSTRUCTOR:
       ADD_VALUE_PROPERTY(JSBUILTIN_STRING_PROTOTYPE, (JSBUILTIN_ARRAYBUFFER_PROTOTYPE));
@@ -1551,7 +1551,6 @@ static inline bool __jsobj_helper_is_all_regular(__jsobject *obj) {
 }
 
 void __jsobj_internal_PutByValue(__jsobject *o, uint32_t index, TValue &v, bool throw_p) {
-
   if (__jsobj_helper_is_all_regular(o)) {
     __jsprop *prop = __jsobj_helper_get_propertyByValue(o, index);
     if (prop) {
@@ -1605,12 +1604,12 @@ void __jsobj_internal_PutByValue(__jsobject *o, uint32_t index, TValue &v, bool 
 }
 
 // ecma 8.12.5
-void __jsobj_internal_Put(__jsobject *o, __jsstring *p, TValue &v, bool throw_p, bool isStrict) {
+bool __jsobj_internal_Put(__jsobject *o, __jsstring *p, TValue &v, bool throw_p, bool isStrict) {
   bool isNum;
   uint32 idxNum = __jsstr_is_numidx(p, isNum);
   if (isNum) {
     __jsobj_internal_PutByValue(o, idxNum, v, throw_p);
-    return;
+    return true;
   }
   //  Fast path.
   if (__jsobj_helper_is_all_regular(o)) {
@@ -1619,11 +1618,11 @@ void __jsobj_internal_Put(__jsobject *o, __jsstring *p, TValue &v, bool throw_p,
       __jsprop_desc desc = prop->desc;
       if (__writable(desc)) {
         __set_value_gc(&prop->desc, v);
-        return;
+        return true;
       }
     } else {
       __jsobj_helper_init_value_property(o, p, v, JSPROP_DESC_HAS_VWEC);
-      return;
+      return true;
     }
   }
   __jsprop *prop_cache = NULL;
@@ -1636,7 +1635,7 @@ void __jsobj_internal_Put(__jsobject *o, __jsstring *p, TValue &v, bool throw_p,
     }
     // ecma 8.12.5 step 1.b.
     else {
-      return;
+      return false;
     }
   }
   // ecma 8.12.5 step 2.
@@ -1649,7 +1648,7 @@ void __jsobj_internal_Put(__jsobject *o, __jsstring *p, TValue &v, bool throw_p,
   // ecma 8.12.5 step 3.
   if (__jsprop_desc_IsDataDescriptor(own_desc)) {
     __jsobj_helper_add_value_property(o, p, v, JSPROP_DESC_HAS_V, prop_cache);
-    return;
+    return false;
   }
   // ecma 8.12.5 step 4.
   __jsprop_desc desc = __jsobj_internal_GetProperty(o, p);
@@ -1668,12 +1667,13 @@ void __jsobj_internal_Put(__jsobject *o, __jsstring *p, TValue &v, bool throw_p,
     __jsobj_helper_add_value_property(o, p, v, JSPROP_DESC_HAS_VWEC, prop_cache);
   }
   // ecma 8.12.5 step 7.
-  return;
+  return false;
 }
 
 // ecma 8.12.5
 void __jsobj_internal_Put(__jsobject *obj, uint32_t index, TValue &v, bool throw_p) {
   __jsobj_internal_PutByValue(obj, index, v, throw_p);
+  return;
 }
 
 // ecma 8.12.6
@@ -2053,6 +2053,7 @@ TValue __jsobj_helper_get_length_value(__jsobject *obj) {
 void __jsobj_helper_set_length(__jsobject *obj, uint64_t length, bool throw_p) {
   TValue v = (length <= INT32_MAX) ? __number_value(length) : __double_value(length);
   __jsobj_internal_Put(obj, __jsstr_get_builtin(JSBUILTIN_STRING_LENGTH), v, throw_p);
+  return;
 }
 
 
@@ -2461,18 +2462,18 @@ TValue __jsobj_defineProperties(TValue &this_object, TValue &o, TValue &properti
   __jsobject *obj = __jsval_to_object(o);
   // ecma 15.2.3.7 step 2.
   __jsobject *props = __is_js_object(properties) ? __jsval_to_object(properties) : __js_ToObject(properties);
-  GCIncRf(props);
+  //GCIncRf(props);
   // ecma 15.2.3.7 step 3, 4, 5, 6
   __jsobj_helper_convert_to_generic(props);
   {
     __jsprop *p = props->prop_list;
     while (p) {
-      __jsobj_walk_defineProperties(properties, p, obj);
+      __jsobj_walk_defineProperties(properties, p, obj);  // may throw exception
       p = p->next;
     }
   }
 
-  GCDecRf(props);
+  //GCDecRf(props);
   return o;
 }
 
@@ -2812,11 +2813,11 @@ static void __jsop_check_func_nameprop(__jsobject *obj, __jsstring *pname) {
   return;
 }
 
-void __jsop_setprop(TValue &o, TValue &p, TValue &v) {
+bool __jsop_setprop(TValue &o, TValue &p, TValue &v) {
   __jsobject *obj = __is_js_object(o) ? __jsval_to_object(o) : __js_ToObject(o);
-  MIR_ASSERT(obj);
+  //MIR_ASSERT(obj);
   if (obj->object_type == JSREGULAR_ARRAY) {
-    MAPLE_JS_ASSERT(obj->prop_list == NULL);
+    //MAPLE_JS_ASSERT(obj->prop_list == NULL);
     TValue *array = obj->shared.array_props;
     uint32_t index = __jsarr_getIndex(p);
     uint32_t length = __jsobj_helper_get_length(obj);
@@ -2827,7 +2828,7 @@ void __jsop_setprop(TValue &o, TValue &p, TValue &v) {
           array = obj->shared.array_props;
         }
         __set_regular_elem(array, index, v);
-        return;
+        return true;
       } else {
         MAPLE_JS_ASSERT(index > ARRAY_MAXINDEXNUM_INTERNAL && index < MAX_ARRAY_INDEX);
         // update array length
@@ -2849,22 +2850,24 @@ void __jsop_setprop(TValue &o, TValue &p, TValue &v) {
           uint32_t new_len = __js_ToUint32(v);
           if (new_len != old_len) {
             obj->shared.array_props = __jsarr_RegularRealloc(array, old_len, new_len);
-            return;
+            return true;
           } else {
-            return;
+            return true;
           }
         }
         MAPLE_JS_EXCEPTION(false && "RangeError!");
       }
     }
   }
+  bool rt;
   // property index range is [0, 0xffffffff]
   if (__is_number(p) && __jsval_to_number(p) >= 0) {
     int32_t num = __jsval_to_number(p);
     __jsobj_internal_PutByValue(obj, num, v, false);
+    rt = true;
   } else {
     __jsstring *name = __js_ToString(p);
-    __jsobj_internal_Put(obj, name, v, false);
+    rt = __jsobj_internal_Put(obj, name, v, false);
     if (!__is_string(p)) {
       memory_manager->RecallString(name);
     }
@@ -2872,6 +2875,7 @@ void __jsop_setprop(TValue &o, TValue &p, TValue &v) {
   if (!__is_js_object(o)) {
     memory_manager->ManageObject(obj, RECALL);
   }
+  return rt;
 }
 /*
 void __jsop_setprop(TValue &o, TValue &p, TValue &v) {
@@ -3031,7 +3035,11 @@ TValue __jsop_getprop_by_name(TValue &o, __jsstring *p) {
   if (__is_js_object(o)) {
     __jsobject *obj = __jsval_to_object(o);
     __jsop_check_func_nameprop(obj, p);
-    return __jsobj_internal_Get(obj, p);
+    TValue retV = __jsobj_internal_Get(obj, p);
+    if (__is_js_function(retV)) {
+      __js_function_setup_this_object(&retV, obj);
+    }
+    return retV;
   } else if (__is_string(o)) {
     __jsobject *proto = __jsobj_get_or_create_builtin(JSBUILTIN_STRINGPROTOTYPE);
     __jsprop_desc desc = __jsobj_internal_GetProperty(proto, p);
@@ -3094,7 +3102,8 @@ void __jsop_init_this_prop_by_name(TValue &o, __jsstring *name) {
   }
 }
 
-void __jsop_setprop_by_name(TValue &o, __jsstring *p, TValue &v, bool isStrict) {
+bool __jsop_setprop_by_name(TValue &o, __jsstring *p, TValue &v, bool isStrict) {
+  bool rt;
   __jsobject *obj = __is_js_object(o) ? __jsval_to_object(o) : __js_ToObject(o);
   // check property is valid
   __jsop_check_func_nameprop(obj, p);
@@ -3118,11 +3127,11 @@ void __jsop_setprop_by_name(TValue &o, __jsstring *p, TValue &v, bool isStrict) 
       //}
     }
   }
-  __jsobj_internal_Put(obj, p, v, false, isStrict);
+  rt = __jsobj_internal_Put(obj, p, v, false, isStrict);
   if (!__is_js_object(o)) {
     memory_manager->ManageObject(obj, RECALL);
   }
-  return;
+  return rt;
 }
 
 TValue __jsop_delprop_by_name(TValue &o, __jsstring *nameIndex) {
@@ -3225,7 +3234,12 @@ bool __jsPropertyIsWritable(__jsobject *obj, uint32_t index) {
   return __has_and_writable(desc);
 }
 
-void __jsconsole_pt_log (TValue &thisV, TValue &v) {
-  __jsop_print_item(v);
+void __jsconsole_pt_log (TValue &thisArg, TValue *argList, uint32_t nargs) {
+  for (uint32_t i = 0; i < nargs; i++) {
+    __jsop_print_item(argList[i]);
+    if (i != nargs - 1) {
+      printf(" ");
+    }
+  }
   printf("\n");
 }

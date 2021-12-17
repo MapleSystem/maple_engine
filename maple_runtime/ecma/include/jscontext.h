@@ -53,9 +53,8 @@ bool __js_ToBoolean(TValue &v);
 // Object.
 __jsobject *__js_new_obj_obj_0();
 __jsobject *__js_new_obj_obj_1(TValue &v);
-void __jsop_setprop(TValue &o, TValue &p, TValue &v);
 TValue __jsop_getprop(TValue &o, TValue &p);
-void __jsop_setprop_by_name(TValue &o, __jsstring *p, TValue &v, bool isStrict);
+bool __jsop_setprop_by_name(TValue &o, __jsstring *p, TValue &v, bool isStrict);
 void __jsop_set_this_prop_by_name(TValue &o, __jsstring *p, TValue &v, bool noThrowTE = false);
 void __jsop_init_this_prop_by_name(TValue &o, __jsstring *name);
 TValue __jsop_getprop_by_name(TValue &o, __jsstring *p);

@@ -414,7 +414,8 @@ TValue __jsstr_charAt(TValue &this_string, TValue &pos) {
   // step 1:
   CheckObjectCoercible(this_string);
   // step 2:
-  __jsstring *str = __js_ToString(this_string);
+  bool strIsNew = false;
+  __jsstring *str = __js_ToString(this_string, strIsNew);
   // step 3:
   int32_t d = 0;
   if (!__is_nan(pos)) {
@@ -423,11 +424,15 @@ TValue __jsstr_charAt(TValue &this_string, TValue &pos) {
   uint32_t size = __jsstr_get_length(str);
   // step 5:
   if (d < 0 || d >= (int32_t)size) {
+    if (strIsNew)
+      memory_manager->RecallString(str);
     return __string_value(__jsstr_get_builtin(JSBUILTIN_STRING_EMPTY));
   }
   // step 6:
   __jsstring *str1 = __js_new_string_internal(1, true);
   __jsstr_set_char(str1, 0, __jsstr_get_char(str, (uint32_t)d));
+  if (strIsNew)
+    memory_manager->RecallString(str);
   return __string_value(str1);
 }
 
@@ -1039,6 +1044,7 @@ static inline void __jsstr_get_match_pattern(std::wregex &pattern, TValue &regex
      pattern_str = __js_ToString(regexp);
   }
   pattern.assign((__jsstr_to_wstring(pattern_str)).c_str(), __jsstr_get_length(pattern_str), std::regex::ECMAScript);
+  memory_manager->RecallString(pattern_str);
   return;
 }
 
@@ -1134,7 +1140,6 @@ static int __jsstr_regexp_exec(__jsstring *js_subject, __jsstring *js_pattern,
 
   int res = RegExpExecute(regexp, js_subject, start_offset, offsets,
                           offset_count);
-
   if (res == dart::jscre::JSRegExpErrorNoMatch ||
       res == dart::jscre::JSRegExpErrorHitLimit) {
     return -1;
@@ -1350,6 +1355,30 @@ TValue __jsstr_replace(TValue &this_string, TValue &search, TValue &replace) {
   // step 2:
   __jsstring *s = __js_ToString(this_string);
 
+  if (!__is_regexp(search)) {
+    __jsstring *pattern_str;
+    TValue v;
+    if (__is_js_object(search)) {
+      __jsobject *obj = __jsval_to_object(search);
+      try {
+        v = __object_internal_DefaultValue(obj, JSTYPE_STRING);
+      } catch (const char* estr) {
+        if (__is_string(this_string) == false)
+          memory_manager->RecallString(s);
+        throw estr;
+      }
+      if (!__is_string(v)) {
+        pattern_str = __js_ToString(v);
+        v = __string_value(pattern_str);
+      }
+    } else {
+      pattern_str = __js_ToString(search);
+      v = __string_value(pattern_str);
+    }
+    TValue val = __js_new_regexp_obj(this_string, &v, 1);
+    search = val;
+  }
+
   __jsstring *replace_str;
   if (__is_js_object(replace)) {
     __jsobject *obj = __jsval_to_object(replace);
@@ -1367,24 +1396,6 @@ TValue __jsstr_replace(TValue &this_string, TValue &search, TValue &replace) {
     }
   } else {
     replace_str = __js_ToString(replace);
-  }
-
-  if (!__is_regexp(search)) {
-    __jsstring *pattern_str;
-    TValue v;
-    if (__is_js_object(search)) {
-      __jsobject *obj = __jsval_to_object(search);
-      v = __object_internal_DefaultValue(obj, JSTYPE_STRING);
-      if (!__is_string(v)) {
-        pattern_str = __js_ToString(v);
-        v = __string_value(pattern_str);
-      }
-    } else {
-      pattern_str = __js_ToString(search);
-      v = __string_value(pattern_str);
-    }
-    TValue val = __js_new_regexp_obj(this_string, &v, 1);
-    search = val;
   }
 
   std::vector<std::pair<int,int>> vres_ret;
@@ -1425,6 +1436,8 @@ TValue __jsstr_replace(TValue &this_string, TValue &search, TValue &replace) {
     }
   } while (r == 1 && global && last_index <= __jsstr_get_length(s));
 
+  if (__is_string(this_string) == false)
+    memory_manager->RecallString(s);
   return __jsstr_stdstr_to_value(result);
 }
 

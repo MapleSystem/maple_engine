@@ -647,9 +647,10 @@ static int32_t __jsarr_SortCompare(__jsobject *obj, TValue &cmpfn, uint32_t idx1
        MAPLE_JS_TYPEERROR_EXCEPTION();
      }
     __jsobject *func = __jsval_to_object(cmpfn);
+    __jsfunction *fun =  func->shared.fun;
     TValue arg_list[2] = { j, k };
-    TValue undefined = __undefined_value();
-    TValue res = __jsfun_internal_call(func, undefined, arg_list, 2);
+    TValue thisVal = (fun->thisObject == NULL) ? __undefined_value() : __object_value(fun->thisObject);
+    TValue res = __jsfun_internal_call(func, thisVal, arg_list, 2);
     return __jsval_to_number(res);
   }
   // ecma 15.4.4.11 step 14.

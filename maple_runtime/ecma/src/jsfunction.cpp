@@ -39,6 +39,7 @@ __jsobject *__create_function(void *fp, void *env, uint32_t attrs, int32_t fileI
     GCIncRf(fp);
   }
   fun->env = env;
+  fun->thisObject = NULL;
   // TODO: no object or string here?
   if (env && memory_manager->GetMemHeader(env).memheadtag == MemHeadEnv) {
     // %enviroment needs GC record
@@ -434,4 +435,8 @@ TValue __jsfun_pt_tostring(TValue &function) {
   }
   str = __jsstr_new_from_char("[object Undefined]");
   return __string_value(str);
+}
+void __js_function_setup_this_object (TValue *funT, __jsobject *obj) {
+  __jsfunction *fun =  __jsval_to_object(*funT)->shared.fun;
+  fun->thisObject = obj;
 }

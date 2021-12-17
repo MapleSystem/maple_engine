@@ -36,6 +36,7 @@ struct __jsfunction {
   // | VARG_P   |  NARGS  |  LENGTH |  FLAG   |
   uint32_t attrs;
   int32_t fileIndex; // to indicate what files this function located for plugin
+  __jsobject *thisObject;
 };
 
 // ecma 13.2
@@ -61,4 +62,5 @@ TValue __jsfun_internal_call_interp(__jsfunction *, TValue *, uint32_t);
 TValue __js_new_functionN(void *, TValue *, uint32_t);
 // ecma 15.3.4.2Function.prototype.toString
 TValue __jsfun_pt_tostring(TValue &);
+void __js_function_setup_this_object(TValue *, __jsobject *);
 #endif

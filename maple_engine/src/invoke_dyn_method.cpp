@@ -119,27 +119,43 @@ static void PrintUncaughtException(__jsstring *msg) {
 #define THROWVAL   (func_operand_stack[1])
 #define MLOCALS(x) (func_operand_stack[x])
 
-#define FAST_COMPARE(op) {\
+#define FAST_COMPARE(o) {\
   if ((IS_NUMBER_OR_BOOL(mVal0.x.u64)) && (IS_NUMBER_OR_BOOL(mVal1.x.u64))) {\
-      mVal0.x.u64 = (mVal0.x.i32 op mVal1.x.i32) | NAN_BOOLEAN ;\
-      MPUSH_SELF(mVal0);\
-      func_pc += sizeof(mre_instr_t);\
+    bool rt = (mVal0.x.i32 o mVal1.x.i32);\
+    func_pc += sizeof(mre_instr_t);\
+    condgoto_stmt_t &stmt1 = *(reinterpret_cast<condgoto_stmt_t *>(func_pc));\
+    if (stmt1.op == (maple::Opcode)RE_brtrue32) {\
+      if(rt)\
+        func_pc = (uint8_t*)&stmt1.offset + stmt1.offset;\
+      else\
+        func_pc += sizeof(condgoto_stmt_t);\
       goto *(labels[*func_pc]);\
+    } else if (stmt1.op == (maple::Opcode)RE_brfalse32) {\
+      if(rt)\
+        func_pc += sizeof(condgoto_stmt_t);\
+      else\
+        func_pc = (uint8_t*)&stmt1.offset + stmt1.offset;\
+      goto *(labels[*func_pc]);\
+    } else {\
+      mVal0.x.u64 = rt | NAN_BOOLEAN;\
+      MPUSH_SELF(mVal0);\
+      goto *(labels[*func_pc]);\
+    }\
   } else if (IS_DOUBLE(mVal0.x.u64)) {\
     if (IS_DOUBLE(mVal1.x.u64)) {\
-      mVal0.x.u64 = (mVal0.x.f64 op mVal1.x.f64) | NAN_BOOLEAN;\
+      mVal0.x.u64 = (mVal0.x.f64 o mVal1.x.f64) | NAN_BOOLEAN;\
       MPUSH_SELF(mVal0);\
       func_pc += sizeof(mre_instr_t);\
       goto *(labels[*func_pc]);\
     } else if (IS_NUMBER_OR_BOOL(mVal1.x.u64)) {\
-      mVal0.x.u64 = (mVal0.x.f64 op (double)mVal1.x.i32) | NAN_BOOLEAN;\
+      mVal0.x.u64 = (mVal0.x.f64 o (double)mVal1.x.i32) | NAN_BOOLEAN;\
       MPUSH_SELF(mVal0);\
       func_pc += sizeof(mre_instr_t);\
       goto *(labels[*func_pc]);\
     }\
   } else if (IS_DOUBLE(mVal1.x.u64)) {\
     if (IS_NUMBER_OR_BOOL(mVal0.x.u64)) {\
-      mVal0.x.u64 = ((double)mVal0.x.i32 op mVal1.x.f64) | NAN_BOOLEAN;\
+      mVal0.x.u64 = ((double)mVal0.x.i32 o mVal1.x.f64) | NAN_BOOLEAN;\
       MPUSH_SELF(mVal0);\
       func_pc += sizeof(mre_instr_t);\
       goto *(labels[*func_pc]);\
@@ -492,30 +508,31 @@ extern "C" uint32_t __inc_opcode_cnt_dyn() {
     }\
   }
 
-#define PROP_CACHE_SIZE 64
+#define PROP_CACHE_SIZE 1024
 struct prop_cache {
   uint64_t g;
-  void *o;
-  void *p;
+  TValue o;
+  TValue p;
   TValue ret;
 } prop_cache[PROP_CACHE_SIZE] = {{.g = 0}};
 uint64_t prop_cache_gen = 1;
 #define PROP_CACHE_HASH(obj, name)   (((obj.x.u32 >> 3) ^ name.x.u32) & (PROP_CACHE_SIZE - 1))
-#define PROP_CACHE_RESET(obj, name)  (prop_cache[PROP_CACHE_HASH(obj, name)].o = 0)
+#define PROP_CACHE_RESET(obj, name)  (prop_cache[PROP_CACHE_HASH(obj, name)].o.x.u64 = 0)
 #define PROP_CACHE_INVALIDATE   prop_cache_gen++
 #define PROP_CACHE_SET(obj, name, r) { \
   int ci = PROP_CACHE_HASH(obj, name); \
   prop_cache[ci].g = prop_cache_gen; \
-  prop_cache[ci].o = obj.x.a64; \
-  prop_cache[ci].p = name.x.a64; \
+  prop_cache[ci].o = obj; \
+  prop_cache[ci].p = name; \
   prop_cache[ci].ret = r; \
 }
-#define PROP_CACHE_SET_THIS(obj, name, r) { \
-  int ci = PROP_CACHE_HASH(obj, name); \
-  prop_cache[ci].g = prop_cache_gen; \
-  prop_cache[ci].o = (void*)obj.x.c.payload; \
-  prop_cache[ci].p = name.x.a64; \
-  prop_cache[ci].ret = r; \
+inline bool PROP_CACHE_GET(TValue &obj, TValue &name, TValue &r) {
+  int ci = PROP_CACHE_HASH(obj, name);
+  if (prop_cache_gen == prop_cache[ci].g && prop_cache[ci].o.x.u64 == obj.x.u64 && prop_cache[ci].p.x.u64 == name.x.u64) {
+    r = prop_cache[ci].ret;
+    return true;
+  }
+  return false;
 }
 
 // OP fusion for OP_regread OP_iassignfpoff RE_checkpoint OP_ireadfpoff sequence
@@ -657,24 +674,6 @@ inline TValue IntrinCall(MIRIntrinsicID id, TValue *args, int numArgs, bool is_s
   is_setRetval = true;
 
   return return_value;
-}
-
-inline bool PROP_CACHE_GET(TValue &obj, TValue &name, TValue &r) {
-  int ci = PROP_CACHE_HASH(obj, name);
-  if (prop_cache_gen == prop_cache[ci].g && prop_cache[ci].o == obj.x.a64 && prop_cache[ci].p == name.x.a64) {
-    r = prop_cache[ci].ret;
-    return true;
-  }
-  return false;
-}
-
-inline bool PROP_CACHE_GET_THIS(TValue &obj, TValue &name, TValue &r) {
-  int ci = PROP_CACHE_HASH(obj, name);
-  if (prop_cache_gen == prop_cache[ci].g && prop_cache[ci].o == (void*)obj.x.c.payload && prop_cache[ci].p == name.x.a64) {
-    r = prop_cache[ci].ret;
-    return true;
-  }
-  return false;
 }
 
 TValue InvokeInterpretMethod(DynMFunction &func) {
@@ -936,7 +935,7 @@ label_OP_constval:
           break;
         }
         default: {
-          retMv = __number_value((int32_t)expr.param.constval.i16);
+          retMv = __number_value(expr.param.constval.i16);
           break;
         }
       }
@@ -995,110 +994,153 @@ label_OP_constval64:
     constval_node_t &expr = *(reinterpret_cast<constval_node_t *>(func_pc));
     DEBUGOPCODE(constval64, Expr);
 
-    TValue res = {.x.u64 = 0};
+    TValue res;
     uint64_t u64Val = ((uint64_t)expr.constVal.value);
     PrimType exprPtyp = expr.primType;
-    if (exprPtyp == PTY_dynf64) {
-      union {
-        uint64_t u64;
-        double f64;
-      }xx;
-      xx.u64 = u64Val;
-      if (xx.f64 == -0.0f) {
-        xx.u64 = NEG_ZERO;
+    switch (exprPtyp) {
+      case PTY_dynf64: {
+        res = (TValue){.x.u64 = u64Val};
+        break;
       }
-      res.x.f64 = xx.f64;
-      MPUSH(res);
-      func_pc += sizeof(constval_node_t);
-      goto *(labels[*func_pc]);
-    } else {
-      switch (exprPtyp) {
-        case PTY_i32: {
-          res = __number_value((int32_t)u64Val);
-          break;
-        }
-        case PTY_u32: {
-          res = __number_value((uint32_t)u64Val);
-          break;
-        }
-        case PTY_dynnull: {
-          //assert(u64Val == 0x100000000);
-          res = __null_value();
-          break;
-        }
-        case PTY_dynundef: {
-          //assert(u64Val == 0x800000000);
-          res = __undefined_value();
-          break;
-        }
-        case PTY_dynbool: {
-          res = __boolean_value(u64Val == 0x200000001);
-          break;
-        }
-        case PTY_dynany: {
-          //res.x.u64 = 0;
-          switch ((uint8_t)(u64Val >> 32)) {
-//          convert JSTYPE_* for now until sync with js2mpl
-//            case JSTYPE_NONE: {
-            case 0: {
-              //res.ptyp = JSTYPE_NONE;
-              res = __none_value();
-              break;
-            }
-//            case JSTYPE_UNDEFINED: {
-            case 8: {
-              //res.ptyp = JSTYPE_NONE;
-              res = __none_value();
-              break;
-            }
-//            case JSTYPE_NULL: {
-            case 1: {
-              //res.ptyp = JSTYPE_NONE;
-              res = __none_value();
-              break;
-            }
-//            case JSTYPE_NAN: {
-            case 0xa: {
-              //res.ptyp = JSTYPE_NAN;
-              res = __nan_value();
-              break;
-            }
-//            case JSTYPE_BOOLEAN: {
-            case 2: {
-              //res.ptyp = JSTYPE_BOOLEAN;
-              res = __boolean_value(0);
-              break;
-            }
-//            case JSTYPE_NUMBER: {
-            case 4: {
-              //res.ptyp = JSTYPE_NUMBER;
-              res = __number_value(0);
-              break;
-            }
-//            case JSTYPE_INFINITY:{
-            case 0xb:{
-              res = __infinity_value(u64Val & 0xffffffff);
-              break;
-            }
-//            case JSTYPE_DOUBLE:
-            case 9:
-            default:
-              MAPLE_JS_ASSERT(false);
+      case PTY_i32: {
+        res = __number_value((int32_t)u64Val);
+        break;
+      }
+      case PTY_u32: {
+        res = __number_value((uint32_t)u64Val);
+        break;
+      }
+      case PTY_dynnull: {
+        //assert(u64Val == 0x100000000);
+        res = __null_value();
+        break;
+      }
+      case PTY_dynundef: {
+        //assert(u64Val == 0x800000000);
+        res = __undefined_value();
+        break;
+      }
+      case PTY_dynbool: {
+        res = __boolean_value(u64Val == 0x200000001);
+        break;
+      }
+      case PTY_dynany: {
+        //res.x.u64 = 0;
+        switch ((uint8_t)(u64Val >> 32)) {
+          // convert JSTYPE_* for now until sync with js2mpl
+//        case JSTYPE_NONE: {
+          case 0: {
+            //res.ptyp = JSTYPE_NONE;
+            res = __none_value();
+            break;
           }
-          break;
+//        case JSTYPE_UNDEFINED: {
+          case 8: {
+            //res.ptyp = JSTYPE_NONE;
+            res = __none_value();
+            break;
+          }
+//        case JSTYPE_NULL: {
+          case 1: {
+            //res.ptyp = JSTYPE_NONE;
+            res = __none_value();
+            break;
+          }
+//        case JSTYPE_NAN: {
+          case 0xa: {
+            //res.ptyp = JSTYPE_NAN;
+            res = __nan_value();
+            break;
+          }
+//        case JSTYPE_BOOLEAN: {
+          case 2: {
+            //res.ptyp = JSTYPE_BOOLEAN;
+            res = __boolean_value(0);
+            break;
+          }
+//        case JSTYPE_NUMBER: {
+          case 4: {
+            //res.ptyp = JSTYPE_NUMBER;
+            res = __number_value(0);
+            break;
+          }
+//        case JSTYPE_INFINITY:{
+          case 0xb:{
+            res = __infinity_value(u64Val & 0xffffffff);
+            break;
+          }
+//        case JSTYPE_DOUBLE:
+          case 9:
+          default:
+            MAPLE_JS_ASSERT(false);
         }
-        case PTY_dyni32: {
-          res = __number_value((int32_t)((u64Val << 32) >> 32));
-	  break;
-        }
-        default: {
-          res.x.u64 = u64Val | GetNaNCodeFromPtyp(expr.primType);
-          break;
+        break;
+      }
+      case PTY_dyni32: {
+        res = __number_value((int32_t)((u64Val << 32) >> 32));
+        break;
+      }
+      default: {
+        res.x.u64 = u64Val | GetNaNCodeFromPtyp(expr.primType);
+        break;
+      }
+    }
+    func_pc += sizeof(constval_node_t);
+
+    if (IS_NUMBER(res.x.u64)) {
+      mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func_pc));
+      if (stmt.op >= RE_eq && stmt.op <= RE_ne) {
+        // fuse OP_lt/OP_gt/(other comparisons) OP_brtrue32/OP_brfalse32
+        TValue  &mVal0 = MTOP();
+        if ((IS_NUMBER(mVal0.x.u64))) {
+          bool rt;
+          switch (stmt.op) {
+          case RE_lt:
+            rt = (mVal0.x.i32 < res.x.i32);
+            break;
+          case RE_gt:
+            rt = (mVal0.x.i32 > res.x.i32);
+            break;
+          case RE_le:
+            rt = (mVal0.x.i32 <= res.x.i32);
+            break;
+          case RE_ge:
+            rt = (mVal0.x.i32 >= res.x.i32);
+            break;
+          case RE_eq:
+            rt = (mVal0.x.i32 == res.x.i32);
+            break;
+          case RE_ne:
+            rt = (mVal0.x.i32 != res.x.i32);
+            break;
+          default:
+            MAPLE_JS_ASSERT(false);
+            break;
+          }
+          func_pc += sizeof(mre_instr_t);
+          condgoto_stmt_t &stmt1 = *(reinterpret_cast<condgoto_stmt_t *>(func_pc));
+          if (stmt1.op == (maple::Opcode)RE_brtrue32) {
+            func_sp--;
+            if(rt)
+              func_pc = (uint8_t*)&stmt1.offset + stmt1.offset;
+            else
+              func_pc += sizeof(condgoto_stmt_t);
+            goto *(labels[*func_pc]);
+          } else if (stmt1.op == (maple::Opcode)RE_brfalse32) {
+            func_sp--;
+            if(rt)
+              func_pc += sizeof(condgoto_stmt_t);
+            else
+              func_pc = (uint8_t*)&stmt1.offset + stmt1.offset;
+            goto *(labels[*func_pc]);
+          } else {
+            mVal0.x.u64 = rt | NAN_BOOLEAN;
+            goto *(labels[*func_pc]);
+          }
         }
       }
     }
     MPUSH(res);
-    func_pc += sizeof(constval_node_t);
     goto *(labels[*func_pc]);
   }
 
@@ -2403,6 +2445,34 @@ label_OP_intrinsiccall:
       SetRetval0(res);
       break;
     }
+    case INTRN_JSOP_INIT_THIS_PROP_BY_BINAME: {
+      //MIR_ASSERT(argnums == 1);
+      TValue &v0 = MPOP();
+      __jsstring *v1 = __jsstr_get_builtin((__jsbuiltin_string_id)v0.x.u32);
+      TValue &v = __js_Global_ThisBinding;
+      __jsop_init_this_prop_by_name(v, v1);
+      PROP_CACHE_INVALIDATE;
+      break;
+    }
+    case INTRN_JSOP_SET_THIS_PROP_BY_BINAME:{
+      //MIR_ASSERT(argnums == 2);
+      TValue &arg1 = MPOP();
+      TValue &arg0 = MPOP();
+      CHECKREFERENCEMVALUE(arg1);
+      try {
+        TValue &v0 = __js_Global_ThisBinding;
+        __jsstring *v1 = __jsstr_get_builtin((__jsbuiltin_string_id)arg0.x.u32);
+        if (is_strict && (__is_undefined(__js_ThisBinding) ||
+              __js_SameValue(__js_Global_ThisBinding, __js_ThisBinding)) &&
+          __jsstr_throw_typeerror(v1)) {
+          MAPLE_JS_TYPEERROR_EXCEPTION();
+        }
+        __jsop_set_this_prop_by_name(v0, v1, arg1, true);
+        PROP_CACHE_SET(v0, __string_value(v1), arg1);
+      }
+      CATCHINTRINSICOP();
+      break;
+    }
     case INTRN_JSOP_INIT_THIS_PROP_BY_NAME: {
       //MIR_ASSERT(argnums == 1);
       TValue &v0 = MPOP();
@@ -2426,7 +2496,7 @@ label_OP_intrinsiccall:
           MAPLE_JS_TYPEERROR_EXCEPTION();
         }
         __jsop_set_this_prop_by_name(v0, v1, arg1, true);
-        PROP_CACHE_RESET(v0, arg0);
+        PROP_CACHE_SET(v0, arg0, arg1);
       }
       CATCHINTRINSICOP();
       break;
@@ -2443,8 +2513,11 @@ label_OP_intrinsiccall:
           __is_global_strict && __jsstr_throw_typeerror(s1)) {
           MAPLE_JS_TYPEERROR_EXCEPTION();
         }
-        __jsop_setprop_by_name(v0, s1, v2, is_strict);
-        PROP_CACHE_RESET(v0, v1);
+        if (__jsop_setprop_by_name(v0, s1, v2, is_strict)) {
+          PROP_CACHE_SET(v0, v1, v2);
+        } else {
+          PROP_CACHE_RESET(v0, v1);
+        }
       }
       CATCHINTRINSICOP();
       break;
@@ -2976,47 +3049,30 @@ label_OP_ireadfpoff: // offset from stack frame
     DEBUGOPCODE(ireadfpoff, Expr);
     int32_t offset = (int32_t)expr.param.offset;
     uint8 *addr = frame_pointer + offset;
-    TValue val = {.x.u64 = 0};
-    switch (expr.primType) {
-      case PTY_u1: {
-        val = __boolean_value(*((uint8_t *) addr) & 1);
-        break;
-      }
-      case PTY_u8: {
-        val.x.u64 = *((uint8_t *) addr) | NAN_NUMBER;
-        break;
-      }
-      case PTY_i8: {
-        val.x.u64 = *((int8_t *) addr) | NAN_NUMBER;
-        break;
-      }
-      case PTY_u16: {
-        val.x.u64 = *((uint16_t *) addr) | NAN_NUMBER;
-        break;
-      }
-      case PTY_u32: {
-        val.x.u64 = *((uint32_t *) addr) | NAN_NUMBER;
-        break;
-      }
-      case PTY_i16: {
-        val.x.u64 = *((int16_t *) addr) | NAN_NUMBER;
-        break;
-      }
-      case PTY_i32: {
-        val.x.u64 = *((int32_t *) addr) | NAN_NUMBER;
-        break;
-      }
-      default: {
-        uint64_t lValue = *((uint64_t *)addr);
-        if (lValue == 0) {
-          lValue = NAN_NONE; // NONE value
+    TValue val;
+    val.x.u64 = *((uint64_t *)addr);
+    if (val.x.u64 == 0) {
+      val.x.u64 = NAN_NONE; // NONE value
+    }
+    func_pc += sizeof(mre_instr_t);
+    MPUSH(val);
+    mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func_pc));
+    // fuse OP_intrinsicop
+    if (stmt.op == RE_intrinsicop) {
+      MIRIntrinsicID intrnid = (MIRIntrinsicID)stmt.param.intrinsic.intrinsicId;
+      switch (intrnid) {
+        case INTRN_JS_NUMBER: {
+          if (IS_NUMBER(val.x.u64) || IS_DOUBLE(val.x.u64)) {
+            func_pc += sizeof(mre_instr_t);
+            goto *(labels[*func_pc]);
+          }
+          break;
         }
-        val.x.u64 = lValue;
+        default: {
+          break;
+        }
       }
     }
-    MPUSH(val);
-
-    func_pc += sizeof(mre_instr_t);
     goto *(labels[*func_pc]);
   }
 
@@ -3327,10 +3383,26 @@ label_OP_intrinsicop:
          case INTRN_JSOP_GET_THIS_PROP_BY_NAME: {
            //MIR_ASSERT(argnums == 1);
            TValue &v0 = MPOP();
-           if (PROP_CACHE_GET_THIS(__js_Global_ThisBinding, v0, retMv))
+           if (PROP_CACHE_GET(__js_Global_ThisBinding, v0, retMv))
              break;
            retMv = gInterSource->JSopGetThisPropByName(v0);
-           PROP_CACHE_SET_THIS(__js_Global_ThisBinding, v0, retMv);
+           PROP_CACHE_SET(__js_Global_ThisBinding, v0, retMv);
+           break;
+         }
+         case INTRN_JSOP_GET_THIS_PROP_BY_BINAME: {
+           //MIR_ASSERT(argnums == 1);
+           TValue &v0 = MPOP();
+           __jsbuiltin_string_id  builtinId = (__jsbuiltin_string_id)v0.x.u32;
+           TValue v1 = __string_value(__jsstr_get_builtin((__jsbuiltin_string_id)v0.x.u32));
+           if (PROP_CACHE_GET(__js_Global_ThisBinding, v1, retMv))
+             break;
+           retMv = gInterSource->JSopGetThisPropByName(v1);
+           if (builtinId == JSBUILTIN_STRING_MODULE && __is_none(retMv)) {
+             // in this case the keyword "module" was not initialized before,
+             // so treat it as global module object
+             retMv = __object_value(__jsobj_get_or_create_builtin(JSBUILTIN_MODULE));
+           }
+           PROP_CACHE_SET(__js_Global_ThisBinding, v1, retMv);
            break;
          }
          case INTRN_JSOP_GETPROP: {
@@ -3416,61 +3488,26 @@ label_OP_iassignfpoff:
     TValue &rVal = MPOP();
     int32_t offset = (int32_t)stmt.param.offset;
     uint8 *addr = frame_pointer + offset;
-    switch (stmt.primType) {
-      case PTY_u1: {
-        uint8_t u8 = rVal.x.u8;
-        uint8_t oldU8 = *(uint8_t *)addr;
-        *(uint8_t *)addr = (oldU8 & 0xfe) | (u8 & 0x1);
-        break;
-      }
-      case PTY_u8: {
-        *(uint8_t *)addr = rVal.x.u8;
-        break;
-      }
-      case PTY_i8: {
-        *(int8_t *)addr = rVal.x.i8;
-        break;
-      }
-      case PTY_i16: {
-        *(int16_t *)addr = rVal.x.i16;
-        break;
-      }
-      case PTY_i32: {
-        *(int32_t *)addr = rVal.x.i32;
-        break;
-      }
-      case PTY_u16: {
-        *(uint16_t *)addr = rVal.x.u16;
-        break;
-      }
-      case PTY_u32: {
-        *(uint32_t *)addr = rVal.x.u32;
-        break;
-      }
-      default: {
-      CHECKREFERENCEMVALUE(rVal);
-      TValue oldV = *((TValue*)addr);
+    CHECKREFERENCEMVALUE(rVal);
+    TValue oldV = *((TValue*)addr);
   #ifdef RC_OPT_IASSIGNFPOFF
-      if (IS_NEEDRC(rVal.x.u64) && rVal.x.u64 == oldV) {
-        // do nothing
-      }
-      else
+    if (IS_NEEDRC(rVal.x.u64) && rVal.x.u64 == oldV) {
+      // do nothing
+    }
+    else
   #endif
-      {
-        if (IS_NEEDRC(rVal.x.u64)) {
-          memory_manager->GCIncRf((void *)rVal.x.c.payload);
-        }
-        if (IS_NEEDRC(oldV.x.u64)) {
-          memory_manager->GCDecRf((void *)oldV.x.c.payload);
-        }
-        *(uint64_t *)addr = rVal.x.u64;
+    {
+      if (IS_NEEDRC(rVal.x.u64)) {
+        memory_manager->GCIncRf((void *)rVal.x.c.payload);
       }
+      if (IS_NEEDRC(oldV.x.u64)) {
+        memory_manager->GCDecRf((void *)oldV.x.c.payload);
+      }
+      *(uint64_t *)addr = rVal.x.u64;
+    }
 
-      if (!is_strict && offset > 0 && DynMFunction::is_jsargument(func.header)) {
-        gInterSource->UpdateArguments(offset / sizeof(void *) - 1, rVal);
-      }
-      break;
-      }
+    if (!is_strict && offset > 0 && DynMFunction::is_jsargument(func.header)) {
+      gInterSource->UpdateArguments(offset / sizeof(void *) - 1, rVal);
     }
     func_pc += sizeof(base_node_t);
     goto *(labels[*func_pc]);

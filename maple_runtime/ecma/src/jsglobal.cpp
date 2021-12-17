@@ -280,7 +280,6 @@ TValue __js_parseint(TValue &this_object, TValue *arg_list, uint32_t nargs) {
     return(__nan_value());
   }
 
-  __jsstring *jsstr;
   int32_t base = 10;
 
   // convert 2nd arg to radix
@@ -303,6 +302,7 @@ TValue __js_parseint(TValue &this_object, TValue *arg_list, uint32_t nargs) {
   }
 
   // convert 1st arg to string
+  __jsstring *jsstr;
   if (__is_string(arg_list[0])) {
     jsstr = __jsval_to_string(arg_list[0]);
   } else if ((__is_number(arg_list[0]) &&
@@ -317,6 +317,9 @@ TValue __js_parseint(TValue &this_object, TValue *arg_list, uint32_t nargs) {
 
   bool isNum;
   double val = __js_str2num_base_x(jsstr, base, isNum);
+  if (__is_string(arg_list[0]) == false) {
+    memory_manager->RecallString(jsstr);
+  }
   if (!isNum) {
     return(__nan_value());
   }
@@ -336,6 +339,8 @@ TValue __js_parsefloat(TValue &this_object, TValue *arg_list, uint32_t nargs) {
   if (__is_undefined(arg_list[0]) || __is_null(arg_list[0]) || __is_nan(arg_list[0])) {
     return(__nan_value());
   }
+
+  __jsstring *jsstr = nullptr;
   if ((__is_number(arg_list[0]) &&
         (__is_positive_zero(arg_list[0]) || __is_negative_zero(arg_list[0]))) ||
       (__is_double(arg_list[0]) &&
@@ -347,7 +352,11 @@ TValue __js_parsefloat(TValue &this_object, TValue *arg_list, uint32_t nargs) {
   } else if (__is_string(arg_list[0])) {
       return(__js_str2double2(__jsval_to_string(arg_list[0]), isNum));
   } else if (__is_number(arg_list[0])) {
-      return(__js_str2double2(__js_NumberToString(arg_list[0].x.i32), isNum));
+      //return(__js_str2double2(__js_NumberToString(arg_list[0].x.i32), isNum));
+      jsstr = __js_NumberToString(arg_list[0].x.i32);
+      TValue tv = __js_str2double2(jsstr, isNum);
+      memory_manager->RecallString(jsstr);
+      return tv;
   } else if (__is_js_object(arg_list[0])) { //ecma 19.2.4.1 and 7.1.17
       __jsobject *obj = __jsval_to_object(arg_list[0]);
       if (obj->object_class == JSDOUBLE) {
@@ -355,11 +364,15 @@ TValue __js_parsefloat(TValue &this_object, TValue *arg_list, uint32_t nargs) {
       }
       TValue prim = __js_ToPrimitive(arg_list[0], JSTYPE_STRING);
       if (__is_string(prim)) {
-        return(__js_str2double2(__jsval_to_string(prim), isNum));
+        jsstr = __jsval_to_string(prim);
+        //return(__js_str2double2(__jsval_to_string(prim), isNum));
       } else {
-        __jsstring *jsstr = __js_ToStringSlow(prim);
-        return(__js_str2double2(jsstr, isNum));
+        jsstr = __js_ToStringSlow(prim);
+        //return(__js_str2double2(jsstr, isNum));
       }
+      TValue tv = __js_str2double2(jsstr, isNum);
+      memory_manager->RecallString(jsstr);
+      return tv;
   } else if (__is_boolean(arg_list[0])) {
       return(__nan_value());
   } else if (__is_infinity(arg_list[0])) {

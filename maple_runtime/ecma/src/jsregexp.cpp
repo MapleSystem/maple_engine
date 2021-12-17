@@ -28,14 +28,23 @@
 
 // Memory allocation for jscre.
 static void* RegExpAlloc(size_t size) {
+/*
   void *obj = VMMallocGC(size);
   MAPLE_JS_ASSERT(obj);
   return obj;
+*/
+  void *obj = VMMallocGC(size + 4); // allocate an extra uint32_t to hold the size
+  MAPLE_JS_ASSERT(obj);
+  *((uint32_t*)obj) = (uint32_t)size;
+  return (void*)((uint32_t*)obj + 1);
 }
 
 // Memory de-allocation for jscre.
 static void RegExpFree(void *ptr) {
   // GC handles this.
+  void* real_addr = (void*)((uint32_t*)ptr - 1);
+  uint32_t sz = *((uint32_t*)real_addr);
+  memory_manager->RecallMem(real_addr, sz+4);
 }
 
 // Convert char array to 2-byte integer array.
@@ -145,9 +154,11 @@ TValue __js_new_regexp_obj(TValue this_value, TValue *arg_list, uint32_t nargs) 
   TValue js_multiline = __boolean_value(multiline);
   TValue js_last_index = __number_value(last_index);
 
-  const char empty[] = "";
-  __jsstring *js_pattern = __jsstr_new_from_char(empty);
-  __jsstring *js_flags = __jsstr_new_from_char(empty);
+  //const char empty[] = "";
+  //__jsstring *js_pattern = __jsstr_new_from_char(empty);
+  //__jsstring *js_flags = __jsstr_new_from_char(empty);
+  __jsstring *js_pattern = nullptr;
+  __jsstring *js_flags = nullptr;
 
   if (nargs == 0) {
     // No pattern nor flags provided.
@@ -193,7 +204,7 @@ TValue __js_new_regexp_obj(TValue this_value, TValue *arg_list, uint32_t nargs) 
       }
       CheckAndSetFlagOptions(js_flags, js_pattern,
                              global, ignorecase, multiline);
-
+      memory_manager->RecallString(js_flags);
     } else if (!__is_string(arg_list[1]) && !__is_string_object(arg_list[1])) {
       MAPLE_JS_SYNTAXERROR_EXCEPTION();
     }
@@ -204,6 +215,7 @@ TValue __js_new_regexp_obj(TValue this_value, TValue *arg_list, uint32_t nargs) 
 
         CheckAndSetFlagOptions(js_flags, js_pattern,
                                global, ignorecase, multiline);
+        memory_manager->RecallString(js_flags);
       }
     } else if (__is_string(arg_list[0]) ||
                __is_null(arg_list[0]) ||
@@ -215,6 +227,8 @@ TValue __js_new_regexp_obj(TValue this_value, TValue *arg_list, uint32_t nargs) 
 
       CheckAndSetFlagOptions(js_flags, js_pattern,
                              global, ignorecase, multiline);
+      memory_manager->RecallString(js_flags);
+      // js_pattern is released at the end of the function
 
     } else {  // arg_list[0] is object.
       __jsobject *arg_obj = __jsval_to_object(arg_list[0]);
@@ -255,13 +269,18 @@ TValue __js_new_regexp_obj(TValue this_value, TValue *arg_list, uint32_t nargs) 
       }
       CheckAndSetFlagOptions(js_flags, js_pattern,
                              global, ignorecase, multiline);
+      if (__is_string(arg_list[1]) == false)
+        memory_manager->RecallString(js_flags);
     } // end of arg_list[0] is object.
   } else {  // nargs > 2
     MAPLE_JS_SYNTAXERROR_EXCEPTION();
   }
 
   // Set/init properties.
-  if (nargs == 0 || __jsstr_get_length(js_pattern) == 0) {
+  //if (nargs == 0 || __jsstr_get_length(js_pattern) == 0) {
+  if (nargs == 0 || js_pattern == nullptr || __jsstr_get_length(js_pattern) == 0) {
+    if (js_pattern != nullptr)
+      memory_manager->RecallString(js_pattern);
     js_pattern = __jsstr_new_from_char(DEFAULT_REGEXP_PATTERN);
     js_source = __string_value(__jsstr_new_from_char(DEFAULT_REGEXP_PATTERN));
   } else {
@@ -290,6 +309,8 @@ TValue __js_new_regexp_obj(TValue this_value, TValue *arg_list, uint32_t nargs) 
   if (regexp == NULL) {
     MAPLE_JS_SYNTAXERROR_EXCEPTION();
   }
+  RegExpFree(regexp);
+  memory_manager->RecallString(js_pattern);
 
   return __object_value(obj);
 }

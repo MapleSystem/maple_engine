@@ -170,6 +170,7 @@ static __jsfunction *__create_builtin_constructor(__jsbuiltin_object_id id, uint
     fun->attrs |= JSFUNCPROP_CONSTRUCTOR;
   }
   fun->env = NULL;
+  fun->thisObject = NULL;
   return fun;
 }
 

@@ -308,6 +308,55 @@ __jsstring *__js_ToStringSlow(TValue &v) {
   return __jsstr_get_builtin(JSBUILTIN_STRING_NULL);
 }
 
+__jsstring *__js_ToStringSlow(TValue &v, bool& newlyCreated) {
+  newlyCreated = false;
+  switch (__jsval_typeof(v)) {
+    case JSTYPE_UNDEFINED:
+      return __jsstr_get_builtin(JSBUILTIN_STRING_UNDEFINED);
+    case JSTYPE_NULL:
+      return __jsstr_get_builtin(JSBUILTIN_STRING_NULL);
+    case JSTYPE_BOOLEAN:
+      return __jsval_to_boolean(v) ? __jsstr_get_builtin(JSBUILTIN_STRING_TRUE)
+                                   : __jsstr_get_builtin(JSBUILTIN_STRING_FALSE);
+    case JSTYPE_NUMBER: {
+      int32_t n = __jsval_to_int32(v);
+      newlyCreated = (n != 0);
+      return __js_NumberToString(n);
+    }
+    case JSTYPE_DOUBLE: {
+      if (v.x.u64 == NEG_ZERO) {
+        return  __jsstr_get_builtin(JSBUILTIN_STRING_ZERO_CHAR);
+      } else {
+        newlyCreated = true;
+        return __js_DoubleToString(__jsval_to_double(v));
+      }
+    }
+    case JSTYPE_OBJECT: {
+      TValue prim_value = __js_ToPrimitive(v, JSTYPE_STRING);
+      if (!__is_string(prim_value)) {
+        GCCheckAndIncRf(GET_PAYLOAD(prim_value), IS_NEEDRC(prim_value.x.u64));
+      }
+      __jsstring *str = __js_ToString(prim_value, newlyCreated);
+      if (!__is_string(prim_value)) {
+        GCCheckAndDecRf(GET_PAYLOAD(prim_value), IS_NEEDRC(prim_value.x.u64));
+      }
+      newlyCreated = true;
+      return str;
+    }
+    case JSTYPE_NONE:
+      //return __jsstr_get_builtin(JSBUILTIN_STRING_EMPTY);
+      return __jsstr_get_builtin(JSBUILTIN_STRING_UNDEFINED);
+    case JSTYPE_NAN:
+      return __jsstr_get_builtin(JSBUILTIN_STRING_NAN);
+    case JSTYPE_INFINITY:{
+      return __jsstr_get_builtin(__is_neg_infinity(v) ? JSBUILTIN_STRING_NEG_INFINITY_UL: JSBUILTIN_STRING_INFINITY_UL);
+    }
+    default:
+      MAPLE_JS_ASSERT(false && "unreachable.");
+  }
+  return __jsstr_get_builtin(JSBUILTIN_STRING_NULL);
+}
+
 // ecma 9.9
 __jsobject *__js_ToObject(TValue &v) {
   if (IS_OBJECT(v.x.u64))
