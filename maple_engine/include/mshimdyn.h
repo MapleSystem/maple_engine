@@ -112,6 +112,7 @@ public:
   TValue JSopGetBuiltinString(TValue &);
   TValue JSopGetBuiltinObject(TValue &);
   TValue JSString(TValue &);
+  TValue JSStringVal(TValue &);
   TValue JSopLength(TValue &);
   TValue JSopThis();
   TValue JSUnary(MIRIntrinsicID, TValue &);

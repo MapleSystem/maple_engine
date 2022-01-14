@@ -1573,6 +1573,65 @@ TValue InterSource::JSString(TValue &mv) {
   return __string_value(__js_ToString(v0));
 }
 
+TValue InterSource::JSStringVal(TValue &mv) {
+  TValue v0 = mv;
+  if (__is_none(v0)) {
+    if (GET_TYPE(mv) == PTY_dynany)
+      v0 = __undefined_value();
+  } else if (__is_string(v0)) {
+    return __string_value(__jsval_to_string(v0));
+  }
+  __jsstring *jsStr = NULL;
+  switch (__jsval_typeof(v0)) {
+    case JSTYPE_UNDEFINED:
+      jsStr = __jsstr_get_builtin(JSBUILTIN_STRING_UNDEFINED);
+      break;
+    case JSTYPE_NULL:
+      jsStr = __jsstr_get_builtin(JSBUILTIN_STRING_NULL);
+      break;
+    case JSTYPE_BOOLEAN:
+      jsStr = __jsval_to_boolean(v0) ? __jsstr_get_builtin(JSBUILTIN_STRING_TRUE)
+                                   : __jsstr_get_builtin(JSBUILTIN_STRING_FALSE);
+      break;
+    case JSTYPE_NUMBER:
+      jsStr =  __js_NumberToString(__jsval_to_int32(v0));
+      break;
+    case JSTYPE_DOUBLE: {
+      if (v0.x.u64 == NEG_ZERO) {
+        jsStr =  __jsstr_get_builtin(JSBUILTIN_STRING_ZERO_CHAR);
+      } else {
+        jsStr = __js_DoubleToString(__jsval_to_double(v0));
+      }
+      break;
+    }
+    case JSTYPE_OBJECT: {
+      TValue prim_value = __js_ToPrimitive(v0, JSTYPE_UNDEFINED);
+      if (!__is_string(prim_value)) {
+        GCCheckAndIncRf(GET_PAYLOAD(prim_value), IS_NEEDRC(prim_value.x.u64));
+      }
+      __jsstring *str = __js_ToString(prim_value);
+      if (!__is_string(prim_value)) {
+        GCCheckAndDecRf(GET_PAYLOAD(prim_value), IS_NEEDRC(prim_value.x.u64));
+      }
+      jsStr = str;
+      break;
+    }
+    case JSTYPE_NONE:
+      jsStr = __jsstr_get_builtin(JSBUILTIN_STRING_UNDEFINED);
+      break;
+    case JSTYPE_NAN:
+      jsStr = __jsstr_get_builtin(JSBUILTIN_STRING_NAN);
+      break;
+    case JSTYPE_INFINITY:{
+      jsStr = __jsstr_get_builtin(__is_neg_infinity(v0) ? JSBUILTIN_STRING_NEG_INFINITY_UL: JSBUILTIN_STRING_INFINITY_UL);
+      break;
+    }
+    default:
+      MAPLE_JS_ASSERT(false && "unreachable.");
+  }
+  return __string_value(jsStr == NULL ? __jsstr_get_builtin(JSBUILTIN_STRING_NULL) : jsStr);
+}
+
 TValue InterSource::JSopLength(TValue &mv) {
   if (IS_STRING(mv.x.u64)) {
     __jsstring *primstring = __js_ToString(mv);
@@ -1866,26 +1925,29 @@ TValue InterSource::BoundFuncCall(TValue *args, int numArgs) {
   __jsfunction *func = (__jsfunction *)f->shared.fun;
   MIR_ASSERT(func->attrs & 0xff & JSFUNCPROP_BOUND);
   TValue func_node = __object_value((__jsobject *)(func->fp));
-  TValue *bound_this = NULL;
-  TValue *bound_args = NULL;
+  TValue bound_this;
+  TValue *bound_args;
   if (func->env) {
-    bound_this = &((TValue *)func->env)[0];
+    bound_this = ((TValue *)func->env)[0];
     bound_args = &((TValue *)func->env)[1];
   } else {
-    TValue nullvalue = __undefined_value();
-    bound_this = bound_args = &nullvalue;
+    bound_this = __undefined_value();
+    bound_args = NULL;
   }
   int32_t bound_argnumber = (((func->attrs) >> 16) & 0xff) - 1;
   bound_argnumber = bound_argnumber >= 0 ? bound_argnumber : 0;
   TValue jsArgs[MAXCALLARGNUM];
   MIR_ASSERT(argNum + bound_argnumber <= MAXCALLARGNUM);
   for (int32_t i = 0; i < bound_argnumber; i++) {
-    jsArgs[i] = bound_args[i];
+    if (bound_args != NULL)
+      jsArgs[i] = bound_args[i];
+    else
+      jsArgs[i] = __undefined_value();
   }
   for (uint32 i = 0; i < argNum; i++) {
     jsArgs[i + bound_argnumber] = (args[2 + i]);
   }
-  TValue retCall = (__jsop_call(func_node, *bound_this, &jsArgs[0], bound_argnumber + argNum));
+  TValue retCall = (__jsop_call(func_node, bound_this, &jsArgs[0], bound_argnumber + argNum));
   SetRetval0(retCall);
   return retCall;
 }
@@ -2027,7 +2089,6 @@ TValue InterSource::IntrinCCall(TValue *args, int numArgs) {
 
   // make ccall
   TValue res = __number_value(funcptr(argsI));
-  
   SetRetval0(res);
   VMFreeNOGC(argsI, argsSize);
   return __none_value();

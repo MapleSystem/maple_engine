@@ -340,6 +340,7 @@ TValue __jsarr_pt_pop(TValue &this_array) {
         __jsobj_internal_Delete(o, newlenstr, false, true);
       }
       __jsobj_helper_set_length(o, new_len, true);
+      memory_manager->RecallString(newlenstr);
       return element;
     }
   }

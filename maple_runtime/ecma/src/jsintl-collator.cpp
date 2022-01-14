@@ -311,10 +311,12 @@ TValue CompareStrings(TValue &collator, TValue &x, TValue &y) {
   p = StrToVal("locale");
   v = __jsop_getprop(collator, p);
   std::string locale_str;
-  if (!__is_undefined(v) && __is_string(v))
-    locale_str = ValToStr(v);
-  else
+  if (!__is_undefined(v) && __is_string(v)) {
+    std::string loc = ValToStr(v);
+    locale_str = std::string(ToICULocale(loc));
+  } else {
     locale_str = "en_US"; // default one if missing.
+  }
 
   UErrorCode status = U_ZERO_ERROR;
   UCollator *col = ucol_open(locale_str.c_str(), &status);
@@ -332,8 +334,8 @@ TValue CompareStrings(TValue &collator, TValue &x, TValue &y) {
     ucol_close(col);
   }
 
-  __jsstring *x_str = __jsval_to_string(x);
-  __jsstring *y_str = __jsval_to_string(y);
+  __jsstring *x_str = __js_ToString(x);
+  __jsstring *y_str = __js_ToString(y);
   uint32_t x_len = __jsstr_get_length(x_str);
   uint32_t y_len = __jsstr_get_length(y_str);
 
@@ -396,27 +398,36 @@ TValue __jsintl_CollatorCompare(TValue &collator, TValue &x, TValue &y) {
   TValue p = StrToVal("boundCompare");
   TValue bound_compare = __jsop_getprop(collator, p);
 
-  if (__is_undefined(bound_compare)) {
+#if 0
+  //if (__is_undefined(bound_compare)) {
+
 #define ATTRS(nargs, length) \
   ((uint32_t)(uint8_t)(nargs == UNCERTAIN_NARGS ? 1: 0) << 24 | (uint32_t)(uint8_t)nargs << 16 | \
        (uint32_t)(uint8_t)length << 8 | JSFUNCPROP_NATIVE)
     TValue f = __js_new_function((void*)CompareStrings, NULL, ATTRS(3, 2));
 
-    x = __string_value(__jsval_to_string(x));
-    y = __string_value(__jsval_to_string(y));
+    //x = __string_value(__js_ToString(x));
+    //y = __string_value(__js_ToString(y));
 
-    TValue args[] = { collator, x, y };
-    int arg_count = 1;
+    TValue f_args[] = { collator, x, y };
 
     TValue this_binding_old = __js_ThisBinding;
     __js_ThisBinding = f;
-    TValue bc = __jsfun_pt_bind(f, args, arg_count);
+    //TValue bind = __jsfun_pt_bind(f, f_args, 3);
+    TValue bc = __jsfun_pt_bind(f, f_args, 3);
     __js_ThisBinding = this_binding_old;
-
+/*
+    __jsobject *bind_obj = __jsval_to_object(bind);
+    TValue bind_args[] = { collator };
+    TValue bc = __jsfun_internal_call(bind_obj, collator, bind_args, 1);
+*/
     __jsop_setprop(collator, p, bc);
-  }
+  //}
+#endif
+  TValue res = CompareStrings(collator, x, y);
+
   // Step 2.
-  TValue res = __jsop_getprop(collator, p);
+  //TValue res = __jsop_getprop(collator, p);
   return res;
 }
 

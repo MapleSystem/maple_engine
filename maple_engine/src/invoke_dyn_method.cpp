@@ -537,65 +537,76 @@ inline bool PROP_CACHE_GET(TValue &obj, TValue &name, TValue &r) {
 
 // OP fusion for OP_regread OP_iassignfpoff RE_checkpoint OP_ireadfpoff sequence
 #define FUSE_REGREAD(r) \
-      if (!isEhHappend) { \
-        /* fuse next OP_regread regRetval0 to reduce Retval0 overwrites */\
-        mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func_pc + sizeof(mre_instr_t))); \
-        if (expr.op == RE_regread && (int32_t)expr.param.frameIdx == -kSregRetval0) { \
+  if (!isEhHappend) { \
+    /* fuse next OP_regread regRetval0 to reduce Retval0 overwrites */\
+    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func_pc + sizeof(mre_instr_t))); \
+    if (expr.op == RE_regread && (int32_t)expr.param.frameIdx == -kSregRetval0) { \
+      func_pc += sizeof(mre_instr_t); \
+      /* fuse next OP_iassignfpoff */ \
+      mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func_pc + sizeof(mre_instr_t))); \
+      if (stmt.op == RE_iassignfpoff) { \
+        func_pc += sizeof(mre_instr_t); \
+        CHECKREFERENCEMVALUE(r); \
+        TValue &oldV = *(TValue*)(frame_pointer + (int32_t)stmt.param.offset); \
+        if (IS_NEEDRC(r.x.u64)) { \
+          GCIncRf((void *)r.x.c.payload); \
+        } \
+        if (IS_NEEDRC(oldV.x.u64)) { \
+          GCDecRf((void *)oldV.x.c.payload); \
+        } \
+        oldV.x.u64 = r.x.u64; \
+        if (!is_strict && (int32_t)stmt.param.offset > 0 && DynMFunction::is_jsargument(func.header)) { \
+          gInterSource->UpdateArguments((int32_t)stmt.param.offset / sizeof(void *) - 1, r); \
+        } \
+        func_pc += sizeof(base_node_t); \
+        /* fuse next OP_ireadfpoff  or OP_checkpoint and then OP_ireadfpoff*/ \
+        mre_instr_t &stmt1 = *(reinterpret_cast<mre_instr_t *>(func_pc)); \
+        if (stmt1.op == RE_ireadfpoff && (int32_t)stmt.param.offset == (int32_t)stmt1.param.offset) { \
+          MPUSH(r); \
           func_pc += sizeof(mre_instr_t); \
-          /* fuse next OP_iassignfpoff */ \
-          mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func_pc + sizeof(mre_instr_t))); \
-          if (stmt.op == RE_iassignfpoff) { \
-            func_pc += sizeof(mre_instr_t); \
-            CHECKREFERENCEMVALUE(r); \
-            int32_t offset = (int32_t)stmt.param.offset; \
-            uint8 *addr = frame_pointer + offset; \
-            TValue oldV = *((TValue*)addr); \
-            if (IS_NEEDRC(r.x.u64)) { \
-              memory_manager->GCIncRf((void *)r.x.c.payload); \
-            } \
-            if (IS_NEEDRC(oldV.x.u64)) { \
-              memory_manager->GCDecRf((void *)oldV.x.c.payload); \
-            } \
-            *(uint64_t *)addr = r.x.u64; \
-            if (!is_strict && offset > 0 && DynMFunction::is_jsargument(func.header)) { \
-              gInterSource->UpdateArguments(offset / sizeof(void *) - 1, r); \
-            } \
-            func_pc += sizeof(base_node_t); \
-            /* fuse next OP_ireadfpoff  or OP_checkpoint and then OP_ireadfpoff*/ \
-            mre_instr_t &stmt1 = *(reinterpret_cast<mre_instr_t *>(func_pc)); \
-            if (stmt1.op == RE_ireadfpoff && offset == (int32_t)stmt1.param.offset) { \
-              MPUSH(r); \
-              func_pc += sizeof(mre_instr_t); \
-            } else if (stmt1.op == RE_checkpoint) { \
-              func_pc += sizeof(base_node_t); \
-              mre_instr_t &stmt2 = *(reinterpret_cast<mre_instr_t *>(func_pc)); \
-              if (stmt2.op == RE_ireadfpoff && offset == (int32_t)stmt2.param.offset) { \
-                MPUSH(r); \
-                func_pc += sizeof(mre_instr_t); \
-              } \
-            } \
-          } else { \
+        } else if (stmt1.op == RE_checkpoint) { \
+          func_pc += sizeof(base_node_t); \
+          mre_instr_t &stmt2 = *(reinterpret_cast<mre_instr_t *>(func_pc)); \
+          if (stmt2.op == RE_ireadfpoff && (int32_t)stmt.param.offset == (int32_t)stmt2.param.offset) { \
             MPUSH(r); \
             func_pc += sizeof(mre_instr_t); \
           } \
-          goto *(labels[*func_pc]); \
         } \
-      }
+      } else { \
+        MPUSH(r); \
+        func_pc += sizeof(mre_instr_t); \
+      } \
+      goto *(labels[*func_pc]); \
+    } \
+  }
 
 #define SetRetval0(mv) {\
   FUSE_REGREAD(mv);\
   TValue v = (mv);\
   if (IS_NEEDRC(v.x.u64))\
-    memory_manager->GCIncRf((void *)(v).x.c.payload);\
+    GCIncRf((void *)(v).x.c.payload);\
   if (IS_NEEDRC(gInterSource->retVal0.x.u64))\
-    memory_manager->GCDecRf((void *)gInterSource->retVal0.x.c.payload);\
+    GCDecRf((void *)gInterSource->retVal0.x.c.payload);\
   gInterSource->retVal0.x.u64 = v.x.u64;\
 }
 
 #define SetRetval0NoInc(v, t) {\
   if (IS_NEEDRC(gInterSource->retVal0.x.u64))\
-    memory_manager->GCDecRf((void *)gInterSource->retVal0.x.c.payload);\
+    GCDecRf((void *)gInterSource->retVal0.x.c.payload);\
   gInterSource->retVal0.x.u64 = (v) | t;\
+}
+
+__jsobject **__jsbuiltin_objects = NULL;
+
+inline __jsobject *get_or_create_builtin(__jsbuiltin_object_id id) {
+  if (id >= JSBUILTIN_LAST_OBJECT) {
+    return NULL;
+  }
+  if (__jsbuiltin_objects[id] != NULL) {
+    return __jsbuiltin_objects[id];
+  } else {
+    return __jsobj_get_or_create_builtin(id);
+  }
 }
 
 inline TValue IntrinCall(MIRIntrinsicID id, TValue *args, int numArgs, bool is_strict, bool &is_setRetval) {
@@ -691,6 +702,9 @@ TValue InvokeInterpretMethod(DynMFunction &func) {
 #undef OPCODE
         &&label_OP_Undef };
     bool is_strict = func.is_strict();
+    if (__jsbuiltin_objects == NULL) {
+      __jsbuiltin_objects = __jsobj_get_jsbuiltin_objects();
+    }
     DEBUGMETHODSYMBOL(func.header, "Running JavaScript method:", func.header->evalStackDepth);
     gInterSource->SetCurFunc(&func);
 
@@ -921,16 +935,15 @@ label_OP_constval:
     mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func_pc));
     if (stmt.op == RE_intrinsicop) {
       // fuse OP_constval with INTRN_JS_GET_BISTRING or INTRN_JS_GET_BIOBJECT
-      MIRIntrinsicID intrnid = (MIRIntrinsicID)stmt.param.intrinsic.intrinsicId;
       TValue retMv;
-      switch (intrnid) {
+      switch ((MIRIntrinsicID)stmt.param.intrinsic.intrinsicId) {
         case INTRN_JS_GET_BISTRING: {
           retMv = __string_value(__jsstr_get_builtin((__jsbuiltin_string_id)expr.param.constval.u16));
           func_pc += sizeof(mre_instr_t);
           break;
         }
         case INTRN_JS_GET_BIOBJECT: {
-          retMv = __object_value(__jsobj_get_or_create_builtin((__jsbuiltin_object_id)expr.param.constval.u16));
+          retMv = __object_value(get_or_create_builtin((__jsbuiltin_object_id)expr.param.constval.u16));
           func_pc += sizeof(mre_instr_t);
           break;
         }
@@ -942,9 +955,8 @@ label_OP_constval:
       MPUSH(retMv);
     } else if (stmt.op == RE_intrinsiccall) {
       // fuse OP_constval with INTRN_JSOP_ADD
-      MIRIntrinsicID intrnid = (MIRIntrinsicID)stmt.param.intrinsic.intrinsicId;
       bool isEhHappend = false;
-      switch (intrnid) {
+      switch ((MIRIntrinsicID)stmt.param.intrinsic.intrinsicId) {
         case INTRN_JSOP_ADD: {
           TValue op0 = MPOP();
           if (IS_NUMBER(op0.x.u64)) {
@@ -956,6 +968,10 @@ label_OP_constval:
             }
             SetRetval0(op0);
             func_pc += sizeof(mre_instr_t);
+            mre_instr_t &stmt1 = *(reinterpret_cast<mre_instr_t *>(func_pc));
+            if (stmt1.op == RE_regread) {
+              goto label_OP_regread;
+            }
             break;
           } else if (IS_DOUBLE(op0.x.u64)) {
             double r;
@@ -981,6 +997,19 @@ label_OP_constval:
           break;
         }
       }
+    } else if (stmt.op == RE_iassignfpoff) {
+      mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func_pc));
+      TValue &oldV = *(TValue*)(frame_pointer + (int32_t)stmt.param.offset);
+      if (IS_NEEDRC(oldV.x.u64)) {
+        GCDecRf((void *)oldV.x.c.payload);
+      }
+      oldV = __number_value((int32_t)expr.param.constval.i16);
+
+      if (!is_strict && (int32_t)stmt.param.offset > 0 && DynMFunction::is_jsargument(func.header)) {
+        gInterSource->UpdateArguments((int32_t)stmt.param.offset / sizeof(void *) - 1, oldV);
+      }
+      func_pc += sizeof(base_node_t);
+      goto *(labels[*func_pc]);
     } else {
       TValue res = {.x.u64 = NAN_NUMBER};
       res.x.i32 = (int32_t)expr.param.constval.i16;
@@ -993,6 +1022,12 @@ label_OP_constval64:
   {
     constval_node_t &expr = *(reinterpret_cast<constval_node_t *>(func_pc));
     DEBUGOPCODE(constval64, Expr);
+    func_pc += sizeof(constval_node_t);
+    mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func_pc));
+    if (stmt.op == RE_assertnonnull) {
+      func_pc += sizeof(base_node_t);
+      goto *(labels[*func_pc]);
+    }
 
     TValue res;
     uint64_t u64Val = ((uint64_t)expr.constVal.value);
@@ -1085,10 +1120,8 @@ label_OP_constval64:
         break;
       }
     }
-    func_pc += sizeof(constval_node_t);
 
     if (IS_NUMBER(res.x.u64)) {
-      mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func_pc));
       if (stmt.op >= RE_eq && stmt.op <= RE_ne) {
         // fuse OP_lt/OP_gt/(other comparisons) OP_brtrue32/OP_brfalse32
         TValue  &mVal0 = MTOP();
@@ -1165,15 +1198,17 @@ label_OP_cvt:
   {
     // Handle expression node: cvt
     mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func_pc));
-    PrimType from_ptyp = (PrimType)expr.param.constval.u8;
     PrimType destPtyp = expr.primType;
     DEBUGOPCODE(cvt, Expr);
-
+    func_pc += sizeof(mre_instr_t);
+    if (destPtyp == PTY_dynany) {
+      goto *labels[*func_pc];
+    }
+    PrimType from_ptyp = (PrimType)expr.param.constval.u8;
     TValue &op = MTOP();
     if (IsPrimitiveDyn(from_ptyp)) {
       CHECKREFERENCEMVALUE(op);
     }
-    func_pc += sizeof(mre_instr_t);
     auto target = labels[*func_pc];
 
     int64_t from_int;
@@ -2151,14 +2186,13 @@ label_OP_iassignoff:
     TValue &res = MPOP();
     TValue &base = MPOP();
     if (IS_NEEDRC(res.x.u64)) {
-      memory_manager->GCIncRf((void *)res.x.c.payload);
+      GCIncRf((void *)res.x.c.payload);
     }
-    uint8_t* addr = (uint8_t*)base.x.c.payload + (int32_t)stmt.param.offset;
-    TValue v = *(TValue *)addr;
+    TValue &v = *(TValue*)((uint8_t*)base.x.c.payload + (int32_t)stmt.param.offset);
     if (IS_NEEDRC(v.x.u64)) {
-      memory_manager->GCDecRf((void *)v.x.c.payload);
+      GCDecRf((void *)v.x.c.payload);
     }
-    *(uint64_t *)addr = res.x.u64;
+    v.x.u64 = res.x.u64;
 
     func_pc += sizeof(mre_instr_t);
     goto *(labels[*func_pc]);
@@ -2195,9 +2229,9 @@ label_OP_regassign:
      case -kSregRetval0: {
       TValue v = res;
       if (IS_NEEDRC(v.x.u64))
-        memory_manager->GCIncRf((void *)(v).x.c.payload);
+        GCIncRf((void *)(v).x.c.payload);
       if (IS_NEEDRC(gInterSource->retVal0.x.u64))
-        memory_manager->GCDecRf((void *)gInterSource->retVal0.x.c.payload);
+        GCDecRf((void *)gInterSource->retVal0.x.c.payload);
       gInterSource->retVal0.x.u64 = v.x.u64;
       //SetRetval0(res);
       break;
@@ -2301,20 +2335,15 @@ label_OP_call:
     mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func_pc));
     DEBUGOPCODE(call, Stmt);
     // get the parameters
-    TValue args[MAXCALLARGNUM];
     int numArgs = stmt.param.intrinsic.numOpnds - 1;
-    //int startArg = 1;
-    // assert(numArgs < MAXCALLARGNUM && "too many args");
-    for (int i = numArgs - 1; i >= 0; i--) {
-      args[i] = MPOP();
-    }
+    func_sp -= numArgs;
+    TValue *args = &func_operand_stack[func_sp + 1];
+
     TValue thisVal,env;
     thisVal = env = NullPointValue();
     int32_t offset = gInterSource->PassArguments(thisVal, (void *)env.x.u64, args,
                     numArgs, -1);
     gInterSource->sp += offset;
-    // TValue this_arg = MvalToJsval(thisVal);
-    // TValue old_this = __js_entry_function(&this_arg, false);
     constval_node_t &expr = *(reinterpret_cast<constval_node_t *>(func_pc));
     //(call, Stmt);
     TValue val;
@@ -2337,13 +2366,10 @@ label_OP_icall:
     mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func_pc));
     DEBUGOPCODE(icall, Stmt);
     // get the parameters
-    TValue args[MAXCALLARGNUM];
     int numArgs = stmt.param.intrinsic.numOpnds;
-    //MASSERT(numArgs >= 2, "num of args of icall should be gt than 2");
-    for (int i = numArgs - 1; i > 0; i--) {
-      args[i] = MPOP();
-    }
-    TValue args0 = MPOP();
+    func_sp -= numArgs;
+    TValue *args = &func_operand_stack[func_sp + 1];
+    TValue args0 = args[0];
     args[0] = __function_value((void *)args0.x.c.payload);
     TValue retCall = gInterSource->FuncCall((void *)args0.x.c.payload, false, nullptr, args, numArgs, 2, -1, false);
 
@@ -2354,8 +2380,6 @@ label_OP_icall:
         goto *(labels[*func_pc]);
       }
       gInterSource->InsertEplog();
-      // gInterSource->FinishFunc();
-      //return retCall; // continue to unwind
       func.pc = func_pc;
       func.sp = func_sp;
       return retCall;
@@ -2372,11 +2396,10 @@ label_OP_intrinsiccall:
     mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func_pc));
     uint32_t numOpnds = stmt.param.intrinsic.numOpnds;
     DEBUGCOPCODE(intrinsiccall, Stmt);
-    MIRIntrinsicID intrnid = (MIRIntrinsicID)stmt.param.intrinsic.intrinsicId;
     uint32_t argnums = numOpnds;
     bool isEhHappend = false;
     void *newPc = nullptr;
-    switch (intrnid) {
+    switch ((MIRIntrinsicID)stmt.param.intrinsic.intrinsicId) {
       case INTRN_JS_NEW: {
         TValue &conVal = MPOP();
         TValue retMv = gInterSource->JSopNew(conVal);
@@ -2652,11 +2675,8 @@ label_OP_intrinsiccall:
       break;
     }
       case INTRN_JS_DATE: {
-        TValue args[argnums];
-        for (int i = argnums-1; i >= 0; i--) {
-          TValue &tv= MPOP();
-          args[i] = tv;
-        }
+        func_sp -= argnums;
+        TValue *args = &func_operand_stack[func_sp + 1];
         TValue retMv = gInterSource->JSDate(argnums, args);
         SetRetval0(retMv);
         break;
@@ -2770,18 +2790,15 @@ label_OP_intrinsiccall:
       }
       case INTRN_JSOP_CALL:
       case INTRN_JSOP_NEW: {
-        TValue args[MAXCALLARGNUM];
         int numArgs = stmt.param.intrinsic.numOpnds;
-        //assert(numArgs < MAXCALLARGNUM && numArgs >= 2 && "num of args of jsop call is wrong");
-        for (int i = numArgs - 1; i >= 0; i--) {
-          args[i] = MPOP();
-        }
+        func_sp -= numArgs;
+        TValue *args = &func_operand_stack[func_sp + 1];
+
         CHECKREFERENCEMVALUE(args[0]);
         TValue retCall;
         bool is_setRetVal = false;
         try {
-          //TValue retCall = gInterSource->IntrinCall(intrnid, args, numArgs);
-          retCall = IntrinCall(intrnid, args, numArgs, is_strict, is_setRetVal);
+          retCall = IntrinCall((MIRIntrinsicID)stmt.param.intrinsic.intrinsicId, args, numArgs, is_strict, is_setRetVal);
           if (IS_NONE(retCall.x.u64) && GET_PAYLOAD(retCall) == (uint64_t) Exec_handle_exc) {
             isEhHappend = true;
             newPc = gInterSource->currEH->GetEHpc(&func);
@@ -2846,22 +2863,16 @@ label_OP_intrinsiccall:
         break;
       }
       case INTRN_JS_ERROR: {
-        TValue args[MAXCALLARGNUM];
         int numArgs = stmt.param.intrinsic.numOpnds;
-        for (int i = 0; i < numArgs; i ++) {
-          TValue &v0 = MPOP();
-          args[numArgs - i - 1] = v0;
-        }
+        func_sp -= numArgs;
+        TValue *args = &func_operand_stack[func_sp + 1];
         gInterSource->IntrnError(args, numArgs);
         break;
       }
       case INTRN_JSOP_CCALL: {
-        TValue args[MAXCALLARGNUM];
         int numArgs = stmt.param.intrinsic.numOpnds;
-        for (int i = 0; i < numArgs; i ++) {
-          TValue &v0 = MPOP();
-          args[numArgs - i - 1] = v0;
-        }
+        func_sp -= numArgs;
+        TValue *args = &func_operand_stack[func_sp + 1];
         gInterSource->IntrinCCall(args, numArgs);
         break;
       }
@@ -2877,7 +2888,7 @@ label_OP_intrinsiccall:
         break;
       }
       default:
-        MASSERT(false, "Hit OP_intrinsiccall with id: 0x%02x", (int)intrnid);
+        MASSERT(false, "Hit OP_intrinsiccall with id: 0x%02x", (int)stmt.param.intrinsic.intrinsicId);
         break;
     }
     if (isEhHappend) {
@@ -3047,32 +3058,82 @@ label_OP_ireadfpoff: // offset from stack frame
     // Handle expression node: ireadfpoff
     mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func_pc));
     DEBUGOPCODE(ireadfpoff, Expr);
-    int32_t offset = (int32_t)expr.param.offset;
-    uint8 *addr = frame_pointer + offset;
-    TValue val;
-    val.x.u64 = *((uint64_t *)addr);
-    if (val.x.u64 == 0) {
-      val.x.u64 = NAN_NONE; // NONE value
-    }
+    TValue &val = *(TValue*)(frame_pointer + (int32_t)expr.param.offset);
     func_pc += sizeof(mre_instr_t);
-    MPUSH(val);
     mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func_pc));
-    // fuse OP_intrinsicop
     if (stmt.op == RE_intrinsicop) {
-      MIRIntrinsicID intrnid = (MIRIntrinsicID)stmt.param.intrinsic.intrinsicId;
-      switch (intrnid) {
-        case INTRN_JS_NUMBER: {
-          if (IS_NUMBER(val.x.u64) || IS_DOUBLE(val.x.u64)) {
-            func_pc += sizeof(mre_instr_t);
-            goto *(labels[*func_pc]);
-          }
-          break;
-        }
-        default: {
-          break;
-        }
+      // fuse OP_intrinsicop
+      if ((MIRIntrinsicID)stmt.param.intrinsic.intrinsicId == INTRN_JS_NUMBER && (IS_NUMBER(val.x.u64) || (val.x.u64 != 0 && IS_DOUBLE(val.x.u64)))) {
+        func_pc += sizeof(mre_instr_t);
+        MPUSH(val);
+        goto *(labels[*func_pc]);
       }
+      else {
+        if (val.x.u64 == 0) {
+          val.x.u64 = NAN_NONE;
+        }
+        MPUSH(val);
+        goto label_OP_intrinsicop;
+      }
+    } else if (stmt.op == RE_ireadfpoff) {
+      // fuse OP_ireadfpoff
+      func_pc += sizeof(mre_instr_t);
+      TValue &val1 = *(TValue*)(frame_pointer + (int32_t)stmt.param.offset);
+      mre_instr_t &stmt1 = *(reinterpret_cast<mre_instr_t *>(func_pc));
+      if (stmt1.op == RE_rem && IS_NUMBER(val.x.u64) && IS_NUMBER(val1.x.u64) && val1.x.i32 > 0) {
+        // fuse OP_rem
+        TValue v = val;
+        v.x.i32 = v.x.i32 % val1.x.i32;
+        func_pc += sizeof(binary_node_t);
+        mre_instr_t &stmt2 = *(reinterpret_cast<mre_instr_t *>(func_pc));
+        if (stmt2.op == RE_constval) {
+          // fuse OP_constval
+          mre_instr_t &stmt3 = *(reinterpret_cast<mre_instr_t *>(func_pc + sizeof(mre_instr_t)));
+          if (stmt3.op == RE_eq) {
+            // fuse OP_eq
+            func_pc += 2 * sizeof(mre_instr_t);
+            v.x.u64 = (v.x.i32 == (int32_t)stmt2.param.constval.i16);
+            condgoto_stmt_t &stmt4 = *(reinterpret_cast<condgoto_stmt_t *>(func_pc));
+            if (stmt4.op == (maple::Opcode)RE_brtrue32) {
+              // fuse OP_brtrue32
+              if(v.x.i32)
+                func_pc = (uint8_t*)&stmt4.offset + stmt4.offset;
+              else
+                func_pc += sizeof(condgoto_stmt_t);
+              goto *(labels[*func_pc]);
+            } else if (stmt4.op == (maple::Opcode)RE_brfalse32) {
+              // fuse OP_brfalse32
+              if(v.x.i32)
+                func_pc += sizeof(condgoto_stmt_t);
+              else
+                func_pc = (uint8_t*)&stmt4.offset + stmt4.offset;
+              goto *(labels[*func_pc]);
+            } else {
+              v.x.u64 |= NAN_BOOLEAN;
+              MPUSH(v);
+              goto *(labels[*func_pc]);
+            }
+          }
+          MPUSH(v);
+          goto label_OP_constval;
+        }
+        MPUSH(v);
+        goto *(labels[*func_pc]);
+      }
+      if (val.x.u64 == 0) {
+        val.x.u64 = NAN_NONE;
+      }
+      MPUSH(val);
+      if (val1.x.u64 == 0) {
+        val1.x.u64 = NAN_NONE;
+      }
+      MPUSH(val1);
+      goto *(labels[*func_pc]);
     }
+    if (val.x.u64 == 0) {
+      val.x.u64 = NAN_NONE;
+    }
+    MPUSH(val);
     goto *(labels[*func_pc]);
   }
 
@@ -3175,8 +3236,25 @@ label_OP_neg:
   {
     // Handle expression node: neg
     DEBUGOPCODE(neg, Expr);
-    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func_pc));
-    TValue &mv0 = MPOP();
+    TValue &mv0 = MTOP();
+    if (IS_NUMBER(mv0.x.u64)) {
+      if (mv0.x.i32 == 0)
+        mv0.x.u64 = NEG_ZERO;
+      else
+        mv0.x.i32 = -mv0.x.i32;
+      func_pc += sizeof(mre_instr_t);
+      goto *(labels[*func_pc]);
+    } else if (IS_DOUBLE(mv0.x.u64)) {
+      if (fabs(mv0.x.f64 - 0.0f) < NumberMinValue) {
+        mv0.x.u64 = POS_ZERO;
+      } else {
+        mv0.x.f64 = -mv0.x.f64;
+      }
+      func_pc += sizeof(mre_instr_t);
+      goto *(labels[*func_pc]);
+    }
+    func_sp--;
+
     CHECKREFERENCEMVALUE(mv0);
     bool isEhHappend = false;
     void *newPc = nullptr;
@@ -3261,9 +3339,8 @@ label_OP_intrinsicop:
     DEBUGOPCODE(intrinsicop, Stmt);
     bool isEhHappend = false;
     void *newPc = nullptr;
-    MIRIntrinsicID intrnid = (MIRIntrinsicID)expr.param.intrinsic.intrinsicId;
        uint32_t argnums = numOpnds;
-       switch (intrnid) {
+       switch ((MIRIntrinsicID)expr.param.intrinsic.intrinsicId) {
          case INTRN_JSOP_TYPEOF: {
            MASSERT(numOpnds == 1, "should be 1 operand");
            TValue &v0 = MPOP();
@@ -3277,7 +3354,6 @@ label_OP_intrinsicop:
            CHECKREFERENCEMVALUE(v0);
            CHECKREFERENCEMVALUE(v1);
            try {
-             //retMv = gInterSource->JSopBinary(intrnid, v0, v1);
              retMv = __boolean_value(__jsop_stricteq(v0, v1));
            }
            CATCHINTRINSICOP();
@@ -3290,7 +3366,6 @@ label_OP_intrinsicop:
            CHECKREFERENCEMVALUE(v0);
            CHECKREFERENCEMVALUE(v1);
            try {
-             //retMv = gInterSource->JSopBinary(intrnid, v0, v1);
              retMv = __boolean_value(__jsop_strictne(v0, v1));
            }
            CATCHINTRINSICOP();
@@ -3303,7 +3378,6 @@ label_OP_intrinsicop:
            CHECKREFERENCEMVALUE(v0);
            CHECKREFERENCEMVALUE(v1);
            try {
-             //retMv = gInterSource->JSopBinary(intrnid, v0, v1);
              retMv = __boolean_value(__jsop_instanceof(v0, v1));
            }
            CATCHINTRINSICOP();
@@ -3316,7 +3390,6 @@ label_OP_intrinsicop:
            CHECKREFERENCEMVALUE(v0);
            CHECKREFERENCEMVALUE(v1);
            try {
-             //retMv = gInterSource->JSopBinary(intrnid, v0, v1);
              retMv = __boolean_value(__jsop_in(v0, v1));
            }
            CATCHINTRINSICOP();
@@ -3331,7 +3404,7 @@ label_OP_intrinsicop:
          case INTRN_JS_GET_BIOBJECT: {
            //MIR_ASSERT(argnums == 1);
            TValue &v0 = MPOP();
-           retMv = __object_value(__jsobj_get_or_create_builtin((__jsbuiltin_object_id)v0.x.u32));
+           retMv = __object_value(get_or_create_builtin((__jsbuiltin_object_id)v0.x.u32));
            break;
          }
          case INTRN_JS_BOOLEAN: {
@@ -3369,6 +3442,12 @@ label_OP_intrinsicop:
            retMv = gInterSource->JSString(v0);
            break;
          }
+         case INTRN_JS_STRING_VAL: {
+           //MIR_ASSERT(argnums == 1);
+           TValue &v0 = MPOP();
+           retMv = gInterSource->JSStringVal(v0);
+           break;
+         }
          case INTRN_JSOP_LENGTH: {
            //MIR_ASSERT(argnums == 1);
            TValue &v0 = MPOP();
@@ -3400,7 +3479,7 @@ label_OP_intrinsicop:
            if (builtinId == JSBUILTIN_STRING_MODULE && __is_none(retMv)) {
              // in this case the keyword "module" was not initialized before,
              // so treat it as global module object
-             retMv = __object_value(__jsobj_get_or_create_builtin(JSBUILTIN_MODULE));
+             retMv = __object_value(get_or_create_builtin(JSBUILTIN_MODULE));
            }
            PROP_CACHE_SET(__js_Global_ThisBinding, v1, retMv);
            break;
@@ -3419,12 +3498,12 @@ label_OP_intrinsicop:
          }
          case INTRN_JS_GET_REFERENCEERROR_OBJECT: {
            //MIR_ASSERT(argnums == 0);
-           retMv = __object_value(__jsobj_get_or_create_builtin(JSBUILTIN_REFERENCEERRORCONSTRUCTOR));
+           retMv = __object_value(get_or_create_builtin(JSBUILTIN_REFERENCEERRORCONSTRUCTOR));
            break;
          }
          case INTRN_JS_GET_TYPEERROR_OBJECT: {
            //MIR_ASSERT(argnums == 0);
-           retMv = __object_value(__jsobj_get_or_create_builtin(JSBUILTIN_TYPEERROR_CONSTRUCTOR));
+           retMv = __object_value(get_or_create_builtin(JSBUILTIN_TYPEERROR_CONSTRUCTOR));
            break;
          }
          case INTRN_JS_REGEXP: {
@@ -3485,11 +3564,9 @@ label_OP_iassignfpoff:
     // Handle statement node: iassignfpoff
     DEBUGOPCODE(iassignfpoff, Stmt);
     mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func_pc));
+    TValue &oldV = *(TValue*)(frame_pointer + (int32_t)stmt.param.offset);
     TValue &rVal = MPOP();
-    int32_t offset = (int32_t)stmt.param.offset;
-    uint8 *addr = frame_pointer + offset;
     CHECKREFERENCEMVALUE(rVal);
-    TValue oldV = *((TValue*)addr);
   #ifdef RC_OPT_IASSIGNFPOFF
     if (IS_NEEDRC(rVal.x.u64) && rVal.x.u64 == oldV) {
       // do nothing
@@ -3498,16 +3575,16 @@ label_OP_iassignfpoff:
   #endif
     {
       if (IS_NEEDRC(rVal.x.u64)) {
-        memory_manager->GCIncRf((void *)rVal.x.c.payload);
+        GCIncRf((void *)rVal.x.c.payload);
       }
       if (IS_NEEDRC(oldV.x.u64)) {
-        memory_manager->GCDecRf((void *)oldV.x.c.payload);
+        GCDecRf((void *)oldV.x.c.payload);
       }
-      *(uint64_t *)addr = rVal.x.u64;
+      oldV.x.u64 = rVal.x.u64;
     }
 
-    if (!is_strict && offset > 0 && DynMFunction::is_jsargument(func.header)) {
-      gInterSource->UpdateArguments(offset / sizeof(void *) - 1, rVal);
+    if (!is_strict && (int32_t)stmt.param.offset > 0 && DynMFunction::is_jsargument(func.header)) {
+      gInterSource->UpdateArguments((int32_t)stmt.param.offset / sizeof(void *) - 1, rVal);
     }
     func_pc += sizeof(base_node_t);
     goto *(labels[*func_pc]);

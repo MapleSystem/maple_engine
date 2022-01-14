@@ -35,6 +35,10 @@ bool __is_global_strict = false;
 // Assume builtin-objects' names are reserved keywords.
 static __jsobject *__jsbuiltin_objects[JSBUILTIN_LAST_OBJECT] = { NULL };
 
+__jsobject **__jsobj_get_jsbuiltin_objects(void) {
+  return __jsbuiltin_objects;
+}
+
 static __jsfunction *__create_builtin_constructor(__jsbuiltin_object_id id, uint16_t *length) {
   *length = 1; // default arguments' length
   void *fp = NULL;

@@ -35,7 +35,7 @@
 #add_definitions(-std=c++11 -DTARGX86_64=1 -DUSE_CLANG -DDYNAMICLANG -g -O0 -fno-omit-frame-pointer -funsigned-char)
 option(MACHINE64 "Enable 64bit Machine compile for JS" OFF)
 if (MACHINE64)
-    add_definitions(-std=c++11 -DTARGX86_64=1 -DUSE_CLANG -DDYNAMICLANG -g -O0 -fno-omit-frame-pointer -funsigned-char -DMACHINE64 -DRC_NO_MMAP -DMARK_CYCLE_ROOTS -DTEST_BENCHMARK)
+    add_definitions(-std=c++11 -DTARGX86_64=1 -DUSE_CLANG -DDYNAMICLANG -g -O2 -fno-omit-frame-pointer -funsigned-char -DMACHINE64 -DRC_NO_MMAP -DMARK_CYCLE_ROOTS -DTEST_BENCHMARK)
 else()
     add_definitions(-std=c++11 -DTARGX86_64=1 -DUSE_CLANG -DDYNAMICLANG -g -O0 -fno-omit-frame-pointer -funsigned-char -DRC_NO_MMAP -DMARK_CYCLE_ROOTS -DTEST_BENCHMARK)
 endif()

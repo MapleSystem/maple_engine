@@ -527,9 +527,12 @@ void CheckAndSetFlagOptions(__jsstring *s, __jsstring *js_pattern,
   }
 
   if (s_is_undefined) {
+    // js_pattern is not passed by reference, so this update won't work as intended.
+#if 0
     if (__jsstr_get_length(js_pattern) == 0) {
       js_pattern = __jsstr_new_from_char(DEFAULT_REGEXP_PATTERN);
     }
+#endif
     global = false;
     ignorecase = false;
     multiline = false;

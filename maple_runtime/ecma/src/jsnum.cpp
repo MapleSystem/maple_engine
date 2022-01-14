@@ -422,7 +422,7 @@ double __js_str2num_base_x(__jsstring *str, int32_t base, bool &isNum) {
   } else if (cur[0] == '+')
       cur++;
   /* hex to decimal.  */
-  if (cur[0] == '0' && (cur[1] == 'x' || cur[1] == 'X')) {
+  if (cur[0] == '0' && len > 2 && (cur[1] == 'x' || cur[1] == 'X')) {
     cur += 2;
     val = __js_toDecimal(cur, end, 16, &endcur);
   } else {

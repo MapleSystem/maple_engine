@@ -239,6 +239,8 @@ static inline void __jsobj_set_prototype(__jsobject *obj, __jsbuiltin_object_id 
 
 void __jsobj_set_prototype(__jsobject *obj, __jsobject *proto_obj);
 __jsobject *__jsobj_get_or_create_builtin(__jsbuiltin_object_id id);
+__jsobject **__jsobj_get_jsbuiltin_objects(void);
+
 static inline __jsobject *__jsobj_get_prototype(__jsobject *obj) {
   if (obj->proto_is_builtin) {
     return __jsobj_get_or_create_builtin(obj->prototype.id);

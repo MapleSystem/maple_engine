@@ -51,7 +51,7 @@ static inline bool __is_boolean(TValue data) {
   return IS_BOOLEAN(data.x.u64);
 }
 
-static inline bool __is_string(TValue data) {
+static inline bool __is_string(TValue& data) {
   return IS_STRING(data.x.u64);
 }
 

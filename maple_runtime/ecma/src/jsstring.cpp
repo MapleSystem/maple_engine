@@ -450,10 +450,14 @@ TValue __jsstr_charCodeAt(TValue &this_string, TValue &idx) {
   if (d < 0 || d >= (int32_t)size)
   // ecma return NaN here.
   {
+    if (__is_string(this_string) == false) // str is created from a non-string
+      memory_manager->RecallString(str);
     return __nan_value();
   }
   // step 5:
   __set_number(v, (int32_t)(__jsstr_get_char(str, (uint32_t)d)));
+  if (__is_string(this_string) == false) // str is created from a non-string
+    memory_manager->RecallString(str);
   return v;
 }
 

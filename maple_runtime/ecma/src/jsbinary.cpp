@@ -685,6 +685,8 @@ TValue __jsop_object_mul(TValue &x, TValue &y) {
         } else if (yobj->object_class == JSOBJECT) {
           TValue yjsval = __object_internal_DefaultValue(yobj, JSTYPE_NUMBER);
           if (__is_undefined(yjsval) || __is_string(yjsval)) {
+            if (__is_string(yjsval))
+              memory_manager->RecallString(__jsval_to_string(yjsval));
             return __nan_value();
           } else {
             int32_t yval = yjsval.x.i32;
@@ -712,6 +714,8 @@ TValue __jsop_object_mul(TValue &x, TValue &y) {
       } else if (xobj->object_class == JSOBJECT) {
         TValue xjsval = __object_internal_DefaultValue(xobj, JSTYPE_NUMBER);
         if (__is_undefined(xjsval) || __is_string(xjsval)) {
+          if (__is_string(xjsval))
+            memory_manager->RecallString(__jsval_to_string(xjsval));
           return __nan_value();
         } else {
           xval = xjsval.x.i32;

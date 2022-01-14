@@ -1110,7 +1110,13 @@ bool __jsobj_helper_HasPropertyAndGet(__jsobject *obj, uint32_t index, TValue *r
   } else {
     p = __js_DoubleToString(index);
   }
-  bool res = __jsobj_helper_HasPropertyAndGet(obj, p, result);
+  bool res = false;
+  try {
+    res = __jsobj_helper_HasPropertyAndGet(obj, p, result);
+  } catch (const char* estr) {
+    memory_manager->RecallString(p);
+    throw estr;
+  }
   memory_manager->RecallString(p);
   return res;
 }

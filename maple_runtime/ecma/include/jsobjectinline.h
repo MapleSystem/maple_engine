@@ -55,12 +55,12 @@ static inline bool __has_configurable(__jsprop_desc desc) {
 }
 
 static inline bool __is_undefined_desc(__jsprop_desc desc) {
-  MAPLE_JS_ASSERT((desc.s.fields & JSPROP_UNDEFINED) == 0 || desc.s.fields == JSPROP_UNDEFINED);
+  //MAPLE_JS_ASSERT((desc.s.fields & JSPROP_UNDEFINED) == 0 || desc.s.fields == JSPROP_UNDEFINED);
   return (desc.s.fields & JSPROP_UNDEFINED) != 0;
 }
 
 static inline bool __enumerable(__jsprop_desc desc) {
-  MAPLE_JS_ASSERT(__has_enumerable(desc));
+  //MAPLE_JS_ASSERT(__has_enumerable(desc));
   return desc.s.attr_enumerable == JSPROP_DESC_ATTR_TRUE;
 }
 
@@ -73,7 +73,7 @@ static inline bool __has_and_unenumerable(__jsprop_desc desc) {
 }
 
 static inline bool __writable(__jsprop_desc desc) {
-  MAPLE_JS_ASSERT(__has_writable(desc));
+  //MAPLE_JS_ASSERT(__has_writable(desc));
   return desc.s.attr_writable == JSPROP_DESC_ATTR_TRUE;
 }
 
@@ -86,7 +86,7 @@ static inline bool __has_and_unwritable(__jsprop_desc desc) {
 }
 
 static inline bool __configurable(__jsprop_desc desc) {
-  MAPLE_JS_ASSERT(__has_configurable(desc));
+  //MAPLE_JS_ASSERT(__has_configurable(desc));
   return desc.s.attr_configurable == JSPROP_DESC_ATTR_TRUE;
 }
 
@@ -159,9 +159,9 @@ static inline void __set_value_gc(__jsprop_desc *desc, TValue &v) {
   UpdateGCReference(&desc->named_data_property.value.x.payload.ptr, v);
 #else
   if (IS_NEEDRC(v.x.u64))
-    memory_manager->GCIncRf((void*)v.x.c.payload);
+    GCIncRf((void*)v.x.c.payload);
   if (IS_NEEDRC(desc->named_data_property.value.x.u64))
-    memory_manager->GCDecRf((void*)(desc->named_data_property.value.x.c.payload));
+    GCDecRf((void*)(desc->named_data_property.value.x.c.payload));
 #endif
   __set_value(desc, v);
 }
