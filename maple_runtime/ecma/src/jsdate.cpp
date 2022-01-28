@@ -531,6 +531,12 @@ TValue __jsdate_ToLocaleDateString(TValue &this_date, TValue *arg_list, uint32_t
   if (__is_undefined(this_date) || __is_null(this_date) || !__is_js_object(this_date)) {
     MAPLE_JS_TYPEERROR_EXCEPTION();
   }
+  // Check if 'this_date' is 'Invalid Date'.
+  if (__jsval_to_object(this_date)->object_class == JSSTRING) {
+    if (__jsstr_equal(__js_ToString(this_date), __jsstr_new_from_char("Invalid Date"))) {
+      return StrToVal("Invalid Date");
+    }
+  }
   if (__jsval_to_object(this_date)->object_class != JSDATE) {
     MAPLE_JS_TYPEERROR_EXCEPTION();
   }
@@ -596,7 +602,7 @@ TValue __jsdate_ToLocaleString(TValue &this_date, TValue *arg_list, uint32_t nar
   // Check if 'this_date' is 'Invalid Date'.
   if (__jsval_to_object(this_date)->object_class == JSSTRING) {
     if (__jsstr_equal(__js_ToString(this_date), __jsstr_new_from_char("Invalid Date"))) {
-      return this_date;
+      return StrToVal("Invalid Date");
     }
   }
   if (__jsval_to_object(this_date)->object_class != JSDATE) {
@@ -657,6 +663,12 @@ TValue __jsdate_ToLocaleTimeString(TValue &this_date, TValue *arg_list, uint32_t
   // Check this_date.
   if (__is_undefined(this_date) || __is_null(this_date) || !__is_js_object(this_date)) {
     MAPLE_JS_TYPEERROR_EXCEPTION();
+  }
+  // Check if 'this_date' is 'Invalid Date'.
+  if (__jsval_to_object(this_date)->object_class == JSSTRING) {
+    if (__jsstr_equal(__js_ToString(this_date), __jsstr_new_from_char("Invalid Date"))) {
+      return StrToVal("Invalid Date");
+    }
   }
   if (__jsval_to_object(this_date)->object_class != JSDATE) {
     MAPLE_JS_TYPEERROR_EXCEPTION();

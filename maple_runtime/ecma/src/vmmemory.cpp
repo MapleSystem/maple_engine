@@ -494,6 +494,11 @@ void MemoryManager::AppMemLeakCheck() {
   RecallRoots(cycle_roots);
 
   printf("\nAfter CRC, #live objects: %lu\n", live_objects.size());
+#if 0
+  for(auto iter : live_objects) {
+    printf("%p: maxRC= %u tag= %d rc= %d\n", iter.first, iter.second, GetMemHeader(iter.first).memheadtag, GCGetRf(iter.first));
+  }
+#endif
 #else
   MarkAndSweep();
 #endif
@@ -1264,30 +1269,80 @@ void MemoryManager::ManageEnvironment(void *envptr, ManageType flag) {
       GCDecRf((void*)tvptr->x.c.payload);
     } else {
 // ToDo: when flag is not RECALL
-      // ManageEnvironment(parentenv, flag);
+    // ManageEnvironment((void*)tvptr->x.c.payload, flag);
     }
   }
-  ptr++;
-  for (uint32 i = 1; i <= argnums; i++) {
-    TValue val = {.x.u64 = (*ptr)};
-    void *true_addr = (void*)(val.x.c.payload);
 
-    if (flag == RECALL) {
-      if(IsHeap(true_addr)) {
-        if (GetMemHeader(true_addr).memheadtag == MemHeadJSObj) {
-          GCDecRf(true_addr);
-        }
-        else {
-          GCDecRf(true_addr);
-        }
+  void* obj = (void*)envptr; // for cyclic RC algorithm, the env object is treated as a __jsobject.
+  ManageType childFlag = flag;  // childFlag is for child objects
+  bool child_no_action = false;
+  if (flag == MARK_RED) {
+    GetMemHeader(obj).refcount--;  // parent just marked red, do RC-- regardless of color
+    if (GetMemHeader(obj).color != CRC_RED) { // if already red, nothing to do
+      GetMemHeader(obj).color = CRC_RED;
+      // continue MARK_RED with children
+    }
+    else
+      child_no_action = true;
+  } else if (flag == SCAN) { // parent just maked blue
+    if (GetMemHeader(obj).color == CRC_RED) { // SCAN only applies to red nodes
+      if (GetMemHeader(obj).refcount > 0) { // this node must have external references; turn green
+        GetMemHeader(obj).color = CRC_GREEN;
+        // continue with SCAN_GREEN for children
+        childFlag = SCAN_GREEN; // continue with SCAN_GREEN for children
+      } else { // RC=0; this is a garbage node
+        GetMemHeader(obj).color = CRC_BLUE;
+        // continue wth SCAN for children
       }
     }
-    else {
+    else
+      child_no_action = true;
+  } else if (flag == SCAN_GREEN) { // parent just turned green, so children turn green too
+    GetMemHeader(obj).refcount++; // RC++ regardless of color
+    if (GetMemHeader(obj).color != CRC_GREEN) {
+      GetMemHeader(obj).color = CRC_GREEN;
+      // continue SCAN_GREEN with children
+    }
+    else
+      child_no_action = true;
+  } else if (flag == COLLECT) { // collect garbage (blue) nodes
+    if (GetMemHeader(obj).color == CRC_BLUE) {
+      GetMemHeader(obj).color = CRC_GREEN;
+      // AddCycleRootNode(&garbage_roots, obj);
+      // env objects are not collected in garbage_roots because the latter only holds __jsobject.
+      // we can and should reclaim now because sweep will not be called for env objects.
+      uint32 totalsize = sizeof(uint64) + sizeof(void *) + argnums * sizeof(void*);
+      RecallMem(envptr, totalsize);
+      // continue COLLECT with children
+    }
+    else
+      child_no_action = true;
+  } else if (flag == RECALL) {
+    // must recall children first; so do nothing here.
+#ifdef MM_DEBUG
+  } else if (flag == CLOSURE) {
+    if(GetMemHeader(obj).visited == false) {
+      GetMemHeader(obj).visited = true;
+      // crc_closure.push_back(obj);  // todo: can we skip the env obj?
+      // continue CLOSURE with children
+    }
+#endif
+  } else {
+    // Note that SWEEP shouldn't reach an env object
+    assert(0);
+  }
+
+  ptr++;
+  if (child_no_action == false) {
+    for (uint32 i = 1; i <= argnums; i++) {
+      TValue val = {.x.u64 = (*ptr)};
+      void *true_addr = (void*)(val.x.c.payload);
+
       if(__is_js_object(val)) {
-        ManageChildObj((__jsobject*)true_addr, flag);
+        ManageChildObj((__jsobject*)true_addr, childFlag);
       }
+      ptr++;
     }
-    ptr++;
   }
 
   if (flag == RECALL) {
@@ -1396,7 +1451,8 @@ void MemoryManager::ManageObject(__jsobject *obj, ManageType flag) {
           if ((flag != SWEEP) && (flag != RECALL)) {
             ManageEnvironment(fun->env, flag);
           } else {
-            GCDecRf(fun->env);
+            if (flag == RECALL)
+              GCDecRf(fun->env);
           }
         }
         if (flag == SWEEP || flag == RECALL) {

@@ -374,10 +374,7 @@ TValue StrVecToVal(std::vector<std::string> strs) {
 }
 
 std::string ValToStr(TValue &value) {
-  if (!__is_string(value)) {
-    MAPLE_JS_ASSERT(false && "not string type");
-  }
-  __jsstring *jsstr = __jsval_to_string(value);
+  __jsstring *jsstr = __js_ToString(value);
   int len = __jsstr_get_length(jsstr);
   std::string res(jsstr->x.ascii, len);
   return res;
@@ -661,7 +658,7 @@ TValue CanonicalizeLocaleList(TValue &locales) {
         MAPLE_JS_TYPEERROR_EXCEPTION();
       }
       // Step 8c iii.
-      __jsstring *tag_str = __jsval_to_string(k_value);
+      __jsstring *tag_str = __js_ToString(k_value);
       // Step 8c iv.
       if (!IsStructurallyValidLanguageTag(tag_str)) {
         MAPLE_JS_RANGEERROR_EXCEPTION();
@@ -1119,7 +1116,7 @@ TValue SupportedLocales(TValue &available_locales,
     __jsprop_desc desc = __jsobj_internal_GetProperty(subset_object, p);
     // Set desc.[[Writable]] to false.
     // Set desc.[[Configurable]] to false.
-    __set_writable(&desc, true);
+    __set_writable(&desc, false);
     __set_configurable(&desc, false);
     // Step 4d.
     // Call the [[DefineOwnProperty]] internal method of 'subset' with 'P', 'desc',

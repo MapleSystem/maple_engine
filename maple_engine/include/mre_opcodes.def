@@ -24,4 +24,7 @@
   OPCODE(goto32, none, none, none)
   OPCODE(ireadfpoff32, none, none, none)
   OPCODE(iassignfpoff32, none, none, none)
-
+  OPCODE(iassignfpoffconstval, none, none, none)
+  OPCODE(iassignfpoffregread, none, none, none)
+  OPCODE(intrinsicopconstval, none, none, none)
+  OPCODE(intrinsicopireadfpoff, none, none, none)

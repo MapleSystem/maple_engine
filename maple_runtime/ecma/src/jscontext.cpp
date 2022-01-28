@@ -138,9 +138,12 @@ static __jsfunction *__create_builtin_constructor(__jsbuiltin_object_id id, uint
     case JSBUILTIN_EVAL_CONSTRUCTOR:
       fp = (void *)__js_eval;
       break;
+//In the table __jsbuiltin_objects_info below, JSBUILTIN_INTL is specified as a JSOBJECT, so it shouldn't have a constructor.
+/*
     case JSBUILTIN_INTL:
       fp = (void *)__js_IntlConstructor;
       break;
+*/
     case JSBUILTIN_INTL_COLLATOR_CONSTRUCTOR:
       fp = (void *)__js_CollatorConstructor;
       isConstructor = true;

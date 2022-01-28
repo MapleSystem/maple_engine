@@ -101,6 +101,17 @@ void InitializeDateTimeFormat(TValue &this_date_time_format, TValue &locales,
   if (__is_null(v)) {
     MAPLE_JS_RANGEERROR_EXCEPTION();
   }
+  // Additional check for JSI9511.
+  if (__is_string(v)) {
+    __jsstring *v_str = __js_ToString(v);
+    if (!(__jsstr_equal(v_str, __jsstr_new_from_char("lookup")) ||
+        __jsstr_equal(v_str, __jsstr_new_from_char("best fit")))) {
+      MAPLE_JS_RANGEERROR_EXCEPTION();
+    }
+  }
+  if (__is_number(v)) {
+    MAPLE_JS_RANGEERROR_EXCEPTION();
+  }
   // Step 6.
   TValue property = StrToVal("localMatcher");
   TValue type = StrToVal("string");
@@ -1096,6 +1107,11 @@ void InitializeDateTimeFormatProperties(TValue &date_time_format, TValue &locale
   // Set 'timeZone' to date_time_format.
   p = StrToVal("timeZone");
   v = __undefined_value();
+  __jsop_setprop(date_time_format, p, v);
+
+  // Set 'hour' to date_time_format.
+  p = StrToVal("hour");
+  v = StrToVal("2-digit");
   __jsop_setprop(date_time_format, p, v);
 }
 

@@ -957,6 +957,7 @@ bool __js_StrictEquality(TValue &x, TValue &y) {
     return (fabs(db1 - db2) < NumberMinValue);
   } else if (__is_double(x) && __is_double(y)) {
     return (fabs(__jsval_to_double(x) - __jsval_to_double(y)) < NumberMinValue);
+  //} else if ((__is_boolean(x) && !__is_boolean(y) && !__is_number(y)) || (!__is_boolean(x) && (!__is_number(x)) && __is_boolean(y)))
   } else if ((__is_boolean(x) && !__is_boolean(y)) || (!__is_boolean(x) && __is_boolean(y)))
       return false;
   else if ((__is_none(x) && __is_undefined(y)) || (__is_none(y) && __is_undefined(x)))
