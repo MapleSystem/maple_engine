@@ -41,8 +41,8 @@ dart::jscre::JSRegExp *RegExpCompile(__jsstring *js_pattern,
 int RegExpExecute(const dart::jscre::JSRegExp *re, __jsstring *js_subject,
 				  int start_offset, int *offsets, int offset_count);
 
-static void* RegExpAlloc(size_t size);
-static void RegExpFree(void *ptr);
+void* RegExpAlloc(size_t size);
+void RegExpFree(void *ptr);
 
 TValue __jsregexp_Source(TValue &this_arg);
 TValue __jsregexp_Global(TValue &this_arg);

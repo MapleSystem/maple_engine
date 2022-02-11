@@ -678,6 +678,8 @@ TValue __jsstr_slice(TValue &this_string, TValue &start, TValue &end) {
   uint32_t span = (to > from) ? (to - from) : 0;
   // step 9:
   __jsstring *str = __jsstr_extract(s, from, span);
+  if (__is_string(this_string) == false)
+    memory_manager->RecallString(s);
   return __string_value(str);
 }
 
@@ -956,6 +958,8 @@ TValue __jsstr_toLowerCase(TValue &this_string) {
     }
   }
   // step 4
+  if (__is_string(this_string) == false)
+    memory_manager->RecallString(s);
   return __string_value(str);
 }
 
@@ -982,6 +986,8 @@ TValue __jsstr_toUpperCase(TValue &this_string) {
     }
   }
   // step 4
+  if (__is_string(this_string) == false)
+    memory_manager->RecallString(s);
   return __string_value(str);
 }
 
@@ -1087,6 +1093,7 @@ static inline TValue __jsstr_stdstr_to_value(std::wstring stdstr) {
     return __string_value(str);
 }
 
+#if 0
 // Memory allocation for jscre.
 static void* RegExpAlloc(size_t size) {
   void *obj = VMMallocGC(size);
@@ -1098,6 +1105,7 @@ static void* RegExpAlloc(size_t size) {
 static void RegExpFree(void *ptr) {
   // GC handles this.
 }
+#endif
 
 static void __jsstr_get_regexp_property(TValue &regexp, __jsstring *&js_pattern,
                                         bool &global, bool &ignorecase, bool &multiline,
@@ -1154,6 +1162,8 @@ static int __jsstr_regexp_exec(__jsstring *js_subject, __jsstring *js_pattern,
     if (i == 0)
       last_index = offsets[2 * i + 1];
   }
+  memory_manager->RecallMem(offsets, (num_captures+2) * 3);
+  RegExpFree(regexp);
 
   return 1;
 }
@@ -1384,13 +1394,21 @@ TValue __jsstr_replace(TValue &this_string, TValue &search, TValue &replace) {
   }
 
   __jsstring *replace_str;
+  bool replace_str_isnew = true;
   if (__is_js_object(replace)) {
     __jsobject *obj = __jsval_to_object(replace);
     if (obj->object_class == JSSTRING) {
       replace_str = obj->shared.prim_string;
+      replace_str_isnew = false;
     } else {
       TValue val;
-      val = __object_internal_DefaultValue(obj, JSTYPE_STRING);
+      try {
+        val = __object_internal_DefaultValue(obj, JSTYPE_STRING);
+      } catch (const char* estr) {
+        if (__is_string(this_string) == false)
+          memory_manager->RecallString(s);
+        throw estr;
+      }
       if (__is_string(val)) {
         replace_str = __js_ToString(val);
       }
@@ -1420,7 +1438,10 @@ TValue __jsstr_replace(TValue &this_string, TValue &search, TValue &replace) {
       if (__js_IsCallable(replace)) {
         TValue val;
         __jsstr_get_replace_value(replace, this_string, vres_ret, val);
+        if (replace_str_isnew)
+          memory_manager->RecallString(replace_str);
         replace_str = __js_ToString(val);
+        replace_str_isnew = true;
       }
 
       std::wstring rep = __jsstr_to_wstring(replace_str);
@@ -1439,6 +1460,9 @@ TValue __jsstr_replace(TValue &this_string, TValue &search, TValue &replace) {
       vres_ret.clear();
     }
   } while (r == 1 && global && last_index <= __jsstr_get_length(s));
+
+  if (replace_str_isnew)
+    memory_manager->RecallString(replace_str);
 
   if (__is_string(this_string) == false)
     memory_manager->RecallString(s);

@@ -173,7 +173,9 @@ TValue __js_ToNumberSlow2(TValue &v, bool &isConvertible) {
 
       TValue prim_value = __js_ToPrimitive(v, JSTYPE_NUMBER);
       if (__is_string(prim_value)) {
-        return __js_ToNumberSlow2(prim_value, isConvertible);
+        TValue tv = __js_ToNumberSlow2(prim_value, isConvertible);
+        memory_manager->RecallString(__jsval_to_string(prim_value));
+        return tv;
       } else if (__is_boolean(prim_value)) {
         isConvertible = true;
         return __number_value(prim_value.x.i32);

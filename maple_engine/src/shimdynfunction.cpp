@@ -1677,6 +1677,7 @@ TValue InterSource::JSopUnaryLnot(TValue &mval) {
         return __boolean_value(!__js_ToBoolean(mval));
       case JSTYPE_OBJECT:
       case JSTYPE_STRING:
+      case JSTYPE_GPBASE: // must be simplestr type
         return __boolean_value(false);
       case JSTYPE_NAN:
       case JSTYPE_NULL:

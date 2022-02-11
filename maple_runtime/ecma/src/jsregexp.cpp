@@ -27,7 +27,7 @@
 #define DEFAULT_REGEXP_PATTERN "(?:)"
 
 // Memory allocation for jscre.
-static void* RegExpAlloc(size_t size) {
+void* RegExpAlloc(size_t size) {
 /*
   void *obj = VMMallocGC(size);
   MAPLE_JS_ASSERT(obj);
@@ -40,7 +40,7 @@ static void* RegExpAlloc(size_t size) {
 }
 
 // Memory de-allocation for jscre.
-static void RegExpFree(void *ptr) {
+void RegExpFree(void *ptr) {
   // GC handles this.
   void* real_addr = (void*)((uint32_t*)ptr - 1);
   uint32_t sz = *((uint32_t*)real_addr);
@@ -480,26 +480,42 @@ TValue __jsregexp_ToString(TValue &this_value) {
   __jsstring *js_source = __js_ToString(source);
 
   __jsstring *js_properties = __jsstr_concat_2(js_slash, js_source);
-  js_properties = __jsstr_concat_2(js_properties, js_slash);
+  __jsstring *tmp = nullptr;
+  // js_properties = __jsstr_concat_2(js_properties, js_slash);
+  tmp = __jsstr_concat_2(js_properties, js_slash);
+  memory_manager->RecallString(js_properties);
+  js_properties = tmp;
+  memory_manager->RecallString(js_slash);
+  if (__is_string(source) == false)
+    memory_manager->RecallString(js_source);
 
   // Append flags.
   TValue js_global = __jsop_getprop_by_name(this_value,
                         __jsstr_get_builtin(JSBUILTIN_STRING_GLOBAL));
   global = __js_ToBoolean(js_global);
   if (global) {
-    js_properties = __jsstr_append_char(js_properties, 'g');
+    // js_properties = __jsstr_append_char(js_properties, 'g');
+    tmp = __jsstr_append_char(js_properties, 'g');
+    memory_manager->RecallString(js_properties);
+    js_properties = tmp;
   }
   TValue js_ignorecase = __jsop_getprop_by_name(this_value,
                   __jsstr_get_builtin(JSBUILTIN_STRING_IGNORECASE_UL));
   ignorecase = __js_ToBoolean(js_ignorecase);
   if (ignorecase) {
-    js_properties = __jsstr_append_char(js_properties, 'i');
+    //js_properties = __jsstr_append_char(js_properties, 'i');
+    tmp = __jsstr_append_char(js_properties, 'i');
+    memory_manager->RecallString(js_properties);
+    js_properties = tmp;
   }
   TValue js_multiline = __jsop_getprop_by_name(this_value,
                       __jsstr_get_builtin(JSBUILTIN_STRING_MULTILINE));
   multiline = __js_ToBoolean(js_multiline);
   if (multiline) {
-   js_properties = __jsstr_append_char(js_properties, 'm');
+    //js_properties = __jsstr_append_char(js_properties, 'm');
+    tmp = __jsstr_append_char(js_properties, 'm');
+    memory_manager->RecallString(js_properties);
+    js_properties = tmp;
   }
 
   return __string_value(js_properties);

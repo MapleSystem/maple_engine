@@ -549,46 +549,33 @@ inline bool PROP_CACHE_GET(TValue &obj, TValue &name, TValue &r) {
 // OP fusion for OP_regread OP_iassignfpoff RE_checkpoint OP_ireadfpoff sequence
 #define FUSE_REGREAD(r) \
   if (!isEhHappend) { \
-    /* fuse next OP_regread regRetval0 to reduce Retval0 overwrites */\
-    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func_pc + sizeof(mre_instr_t))); \
-    if (expr.op == RE_regread && (int32_t)expr.param.frameIdx == -kSregRetval0) { \
+    /* fuse next OP_iassignfpoffregread to reduce Retval0 overwrites */\
+    mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func_pc + sizeof(mre_instr_t))); \
+    if (stmt.op == RE_iassignfpoffregread) { \
       func_pc += sizeof(mre_instr_t); \
-      /* fuse next OP_iassignfpoff */ \
-      mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func_pc + sizeof(mre_instr_t))); \
-      if (stmt.op == RE_iassignfpoff) { \
-        func_pc += sizeof(mre_instr_t); \
-        CHECKREFERENCEMVALUE(r); \
-        TValue &oldV = *(TValue*)(frame_pointer + (int32_t)stmt.param.offset); \
-        if (IS_NEEDRC(r.x.u64)) { \
-          GCIncRf((void *)r.x.c.payload); \
-        } \
-        if (IS_NEEDRC(oldV.x.u64)) { \
-          GCDecRf((void *)oldV.x.c.payload); \
-        } \
-        oldV.x.u64 = r.x.u64; \
-        if (!is_strict && (int32_t)stmt.param.offset > 0 && DynMFunction::is_jsargument(func.header)) { \
-          gInterSource->UpdateArguments((int32_t)stmt.param.offset / sizeof(void *) - 1, r); \
-        } \
-        func_pc += sizeof(base_node_t); \
-        /* fuse next OP_ireadfpoff  or OP_checkpoint and then OP_ireadfpoff*/ \
-        mre_instr_t &stmt1 = *(reinterpret_cast<mre_instr_t *>(func_pc)); \
-        if (stmt1.op == RE_ireadfpoff && (int32_t)stmt.param.offset == (int32_t)stmt1.param.offset) { \
-          MPUSH(r); \
-          func_pc += sizeof(mre_instr_t); \
-        } else if (stmt1.op == RE_checkpoint) { \
-          func_pc += sizeof(base_node_t); \
-          mre_instr_t &stmt2 = *(reinterpret_cast<mre_instr_t *>(func_pc)); \
-          if (stmt2.op == RE_ireadfpoff && (int32_t)stmt.param.offset == (int32_t)stmt2.param.offset) { \
-            MPUSH(r); \
-            func_pc += sizeof(mre_instr_t); \
-          } \
-        } \
-      } else { \
-        MPUSH(r); \
-        func_pc += sizeof(mre_instr_t); \
-      } \
-      goto *(labels[*func_pc]); \
-    } \
+      DEBUGOPCODE(iassignfpoffregread, Stmt);\
+      uint8 *addr = frame_pointer + (int32_t)stmt.param.offset;\
+      CHECKREFERENCEMVALUE(r);\
+      TValue oldV = *((TValue*)addr);\
+      if (IS_NEEDRC(r.x.u64)) {\
+        GCIncRf((void *)r.x.c.payload);\
+      }\
+      if (IS_NEEDRC(oldV.x.u64)) {\
+        GCDecRf((void *)oldV.x.c.payload);\
+      }\
+      *(uint64_t *)addr = r.x.u64;\
+      if (!is_strict && (int32_t)stmt.param.offset > 0 && DynMFunction::is_jsargument(func.header)) {\
+        gInterSource->UpdateArguments((int32_t)stmt.param.offset / sizeof(void *) - 1, r);\
+      }\
+      func_pc += sizeof(base_node_t);\
+      mre_instr_t &stmt1 = *(reinterpret_cast<mre_instr_t *>(func_pc)); \
+      if (stmt1.op == RE_ireadfpoff && (int32_t)stmt.param.offset == (int32_t)stmt1.param.offset) { \
+        DEBUGOPCODE(ireadfpoff, Stmt);\
+         MPUSH(r); \
+         func_pc += sizeof(mre_instr_t); \
+      }\
+      goto *(labels[*func_pc]);\
+    }\
   }
 
 #define SetRetval0(mv) {\
@@ -742,6 +729,11 @@ static inline void intrinsicop1(int intrinsicId, TValue &v0, bool &isEhHappend, 
         v0 = gInterSource->JSStringVal(v0);
         break;
       }
+      case INTRN_JSSTR_LENGTH: {
+        MASSERT(IS_ADDRBASE(v0.x.u64), "__jsstring * should be in address base");
+        v0 = __number_value(__jsstr_get_length((__jsstring *)v0.x.c.payload));
+        break;
+      }
       case INTRN_JSOP_LENGTH: {
         v0 = gInterSource->JSopLength(v0);
         break;
@@ -794,6 +786,10 @@ static inline TValue intrinsicop0(int intrinsicId, DynMFunction &func) {
       }
       case INTRN_JS_GET_TYPEERROR_OBJECT: {
         retMv = __object_value(get_or_create_builtin(JSBUILTIN_TYPEERROR_CONSTRUCTOR));
+        break;
+      }
+      case INTRN_JS_NAN: {
+        retMv = __nan_value();
         break;
       }
       default:
@@ -1108,31 +1104,12 @@ label_OP_constval:
     func_pc += sizeof(mre_instr_t);
 
     mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func_pc));
-    if (stmt.op == RE_intrinsicop) {
-      // fuse OP_constval with INTRN_JS_GET_BISTRING or INTRN_JS_GET_BIOBJECT
-      TValue retMv;
-      switch ((MIRIntrinsicID)stmt.param.intrinsic.intrinsicId) {
-        case INTRN_JS_GET_BISTRING: {
-          retMv = __string_value(__jsstr_get_builtin((__jsbuiltin_string_id)expr.param.constval.u16));
-          func_pc += sizeof(mre_instr_t);
-          break;
-        }
-        case INTRN_JS_GET_BIOBJECT: {
-          retMv = __object_value(get_or_create_builtin((__jsbuiltin_object_id)expr.param.constval.u16));
-          func_pc += sizeof(mre_instr_t);
-          break;
-        }
-        default: {
-          retMv = __number_value(expr.param.constval.i16);
-          break;
-        }
-      }
-      MPUSH(retMv);
-    } else if (stmt.op == RE_intrinsiccall) {
+    if (stmt.op == RE_intrinsiccall) {
       // fuse OP_constval with INTRN_JSOP_ADD
       bool isEhHappend = false;
       switch ((MIRIntrinsicID)stmt.param.intrinsic.intrinsicId) {
         case INTRN_JSOP_ADD: {
+          DEBUGCOPCODE(intrinsiccall, Stmt);
           TValue op0 = MPOP();
           if (IS_NUMBER(op0.x.u64)) {
             int64_t r = (int64_t)op0.x.i32 + (int64_t)expr.param.constval.i16;
@@ -1683,6 +1660,16 @@ label_OP_sub:
             op0.x.i32 = op0.x.i32 - op1.x.i32;
             break;
           }
+          case PTY_simpleobj: {
+            TValue res;
+            bool isEhHappend = false;
+            void *newPc = nullptr;
+            try {
+              res = __jsop_object_sub(op0, op1);
+            }
+            OPCATCHANDGOON(binary_node_t);
+            break;
+          }
           default: {
             MIR_ASSERT(false);
           }
@@ -1853,6 +1840,7 @@ label_OP_div:
             MIR_ASSERT(false);
           }
        }
+      MPUSH_SELF(op0);\
       func_pc += sizeof(binary_node_t);
       goto *(labels[*func_pc]);
     } else {
@@ -1901,6 +1889,17 @@ label_OP_rem:
           case PTY_i32: {
             op0.x.i32 = op0.x.i32 % op1.x.i32;
             break;
+          }
+          case PTY_simpleobj: {
+            TValue res;
+            bool isEhHappend = false;
+            void *newPc = nullptr;
+            try {
+              res = __jsop_object_rem(op0, op1);
+            }
+            OPCATCHANDGOON(binary_node_t);
+            break;
+
           }
           default: {
             MIR_ASSERT(false);
@@ -3231,7 +3230,8 @@ label_OP_ireadfpoff: // offset from stack frame
         break;
       }
       case PTY_i8: {
-        val.x.u64 = *((int8_t *) addr) | NAN_NUMBER;
+        val.x.i8 = *((int8_t *) addr);
+        val.x.u64 |= NAN_NUMBER;
         break;
       }
       case PTY_u16: {
@@ -3243,11 +3243,13 @@ label_OP_ireadfpoff: // offset from stack frame
         break;
       }
       case PTY_i16: {
-        val.x.u64 = *((int16_t *) addr) | NAN_NUMBER;
+        val.x.i16 = *((int16_t *) addr);
+        val.x.u64 |= NAN_NUMBER;
         break;
       }
       case PTY_i32: {
-        val.x.u64 = *((int32_t *) addr) | NAN_NUMBER;
+        val.x.i32 = *((int32_t *) addr);
+        val.x.u64 |= NAN_NUMBER;
         break;
       }
       default: {
@@ -3260,21 +3262,7 @@ label_OP_ireadfpoff: // offset from stack frame
     }
     func_pc += sizeof(mre_instr_t);
     mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func_pc));
-    if (stmt.op == RE_intrinsicop) {
-      // fuse OP_intrinsicop
-      if ((MIRIntrinsicID)stmt.param.intrinsic.intrinsicId == INTRN_JS_NUMBER && (IS_NUMBER(val.x.u64) || (val.x.u64 != 0 && IS_DOUBLE(val.x.u64)))) {
-        func_pc += sizeof(mre_instr_t);
-        MPUSH(val);
-        goto *(labels[*func_pc]);
-      }
-      else {
-        if (val.x.u64 == 0) {
-          val.x.u64 = NAN_NONE;
-        }
-        MPUSH(val);
-        goto label_OP_intrinsicop;
-      }
-    } else if (stmt.op == RE_ireadfpoff) {
+    if (stmt.op == RE_ireadfpoff) {
       // fuse OP_ireadfpoff
       func_pc += sizeof(mre_instr_t);
       TValue val1 = {.x.u64 = 0};

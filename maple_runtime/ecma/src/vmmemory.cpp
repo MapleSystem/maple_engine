@@ -1264,12 +1264,12 @@ void MemoryManager::ManageEnvironment(void *envptr, ManageType flag) {
   ptr++;
   void *parentenv = (void*)(*ptr);
   if (parentenv) {
+    TValue* tvptr = (TValue*)ptr;
     if (flag == RECALL) {
-      TValue* tvptr = (TValue*)ptr;
       GCDecRf((void*)tvptr->x.c.payload);
     } else {
 // ToDo: when flag is not RECALL
-    // ManageEnvironment((void*)tvptr->x.c.payload, flag);
+     ManageEnvironment((void*)tvptr->x.c.payload, flag);
     }
   }
 
