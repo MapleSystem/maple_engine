@@ -751,13 +751,18 @@ bool __jsstr_splitMatch(__jsstring *s, uint32_t *q, TValue &separator, uint32_t 
   // step 3:
   uint32_t sl = __jsstr_get_length(s);
   // step 4:
-  if (*q + rl > sl)
+  if (*q + rl > sl) {
+    if (tmpStr4r)
+      memory_manager->RecallString(r);
     return false;
+  }
   // step 5:
   for (uint32_t i = 0; i < rl; i++) {
     __jschar sc = __jsstr_get_char(s, *q + i);
     __jschar rc = __jsstr_get_char(r, i);
     if (sc != rc) {
+      if (tmpStr4r)
+        memory_manager->RecallString(r);
       return false;
     }
   }
@@ -1154,6 +1159,8 @@ static int __jsstr_regexp_exec(__jsstring *js_subject, __jsstring *js_pattern,
                           offset_count);
   if (res == dart::jscre::JSRegExpErrorNoMatch ||
       res == dart::jscre::JSRegExpErrorHitLimit) {
+    memory_manager->RecallMem(offsets, (num_captures+2) * 3);
+    RegExpFree(regexp);
     return -1;
   }
 

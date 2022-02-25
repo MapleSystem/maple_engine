@@ -136,11 +136,14 @@ __jsobject *__js_ToRegExp(__jsstring *jsstr) {
 
 // ES5 15.10.3 RegExp Constructor
 TValue __js_new_regexp_obj(TValue this_value, TValue *arg_list, uint32_t nargs) {
+/*
+//move to first use below.
   __jsobject *obj = __create_object();
   __jsobj_set_prototype(obj, JSBUILTIN_REGEXPPROTOTYPE);
   obj->object_class = JSREGEXP;
   obj->extensible = true;
   obj->object_type = JSREGULAR_OBJECT;
+*/
 
   // Set default property values.
   std::string source;
@@ -286,6 +289,13 @@ TValue __js_new_regexp_obj(TValue this_value, TValue *arg_list, uint32_t nargs) 
   } else {
     js_source = __string_value(js_pattern);
   }
+
+  __jsobject *obj = __create_object();
+  __jsobj_set_prototype(obj, JSBUILTIN_REGEXPPROTOTYPE);
+  obj->object_class = JSREGEXP;
+  obj->extensible = true;
+  obj->object_type = JSREGULAR_OBJECT;
+
   __jsobj_helper_init_value_property(obj, JSBUILTIN_STRING_SOURCE,
                                      js_source, JSPROP_DESC_HAS_VUWUEUC);
   js_global = __boolean_value(global);

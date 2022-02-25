@@ -269,7 +269,13 @@ TValue __jsfun_intr_Construct(__jsobject *f, TValue &this_arg, TValue *arg_list,
   TValue o = __object_value(obj);
   GCIncRf(obj);
 
-  TValue result = __jsfun_internal_call(f, o, args, arg_count);
+  TValue result;
+  try {
+    result = __jsfun_internal_call(f, o, args, arg_count);
+  } catch (const char* estr) {
+    GCDecRf(obj);
+    throw estr;
+  }
 
   // ecma 13.2 step 9.
   if (__is_js_object(result)) {

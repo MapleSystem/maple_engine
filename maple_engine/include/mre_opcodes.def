@@ -28,3 +28,5 @@
   OPCODE(iassignfpoffregread, none, none, none)
   OPCODE(intrinsicopconstval, none, none, none)
   OPCODE(intrinsicopireadfpoff, none, none, none)
+  OPCODE(getpropbyname, none, none, none)
+  OPCODE(setpropbyname, none, none, none)

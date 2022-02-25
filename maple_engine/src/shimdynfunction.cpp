@@ -1280,6 +1280,10 @@ TValue InterSource::JSopCVT(TValue &mv, PrimType toPtyp, PrimType fromPtyp) {
       case PTY_simplestr: {
         return __string_value((__jsstring *)GET_PAYLOAD(mv));
       }
+      case PTY_f64 :{
+        assert(toPtyp == PTY_dynf64 && "NYI");
+        return mv;
+      };
       default:
         MIR_FATAL("interpreteCvt: NYI");
     }
@@ -1296,6 +1300,10 @@ TValue InterSource::JSopCVT(TValue &mv, PrimType toPtyp, PrimType fromPtyp) {
       case PTY_simpleobj: {
         assert(false&&"NYI");
         break;
+      }
+      case PTY_f64: {
+        assert(fromPtyp == PTY_dynf64 && "NYI");
+        return mv;
       }
       default:
         MIR_FATAL("interpreteCvt: NYI");
@@ -1808,8 +1816,10 @@ void* InterSource::CreateArgumentsObject(TValue *mvArgs, uint32_t passedNargs, T
     if (__is_undefined(elemVal)) {
       continue;
     }
+/*
     if(IS_NEEDRC(mvArgs[i].x.u64))
       memory_manager->GCIncRf((void*)mvArgs[i].x.c.payload);
+*/
     actualArgs++;
     // __jsobj_internal_Put(argumentsObj, i, &elemVal, false);
     __jsobj_helper_init_value_propertyByValue(argumentsObj, i, elemVal, JSPROP_DESC_HAS_VWEC);

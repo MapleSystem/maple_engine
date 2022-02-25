@@ -226,64 +226,6 @@ static void PrintUncaughtException(__jsstring *msg) {
   }\
 }
 
-#define FAST_MUL(op) {\
-  if (IS_NUMBER(op1.x.u64)) {\
-    if (IS_NUMBER(op0.x.u64)) {\
-      int64_t r = (int64_t)op0.x.i32 op (int64_t)op1.x.i32;\
-      if (ABS(r) > INT_MAX) {\
-        op0.x.f64 = (double)r;\
-      } else\
-        op0.x.i32 = r;\
-      MPUSH_SELF(op0);\
-      func_pc += sizeof(binary_node_t);\
-      goto *(labels[*func_pc]);\
-    } else if (IS_DOUBLE(op0.x.u64)) {\
-      double r;\
-      r = op0.x.f64 op (double)op1.x.i32;\
-      if (r == 0) { \
-        op0.x.u64 = ((op0.x.f64 > 0 && op1.x.i32 >= 0) || (op0.x.f64 <= 0 && op1.x.i32 < 0)) ?  POS_ZERO : NEG_ZERO;\
-        MPUSH_SELF(op0);\
-        func_pc += sizeof(binary_node_t);\
-        goto *(labels[*func_pc]);\
-      } else if (ABS(r) <= NumberMaxValue) {\
-        op0.x.f64 = r;\
-        MPUSH_SELF(op0);\
-        func_pc += sizeof(binary_node_t);\
-        goto *(labels[*func_pc]);\
-      }\
-    }\
-  } else if (IS_DOUBLE(op1.x.u64)) {\
-    double r;\
-    if (IS_DOUBLE(op0.x.u64)) {\
-      r = op0.x.f64 op op1.x.f64;\
-      if (r == 0) { \
-        op0.x.u64 = ((op0.x.f64 > 0 && op1.x.f64 > 0) || (op0.x.f64 <= 0 && op1.x.f64 <= 0)) ?  POS_ZERO : NEG_ZERO;\
-        MPUSH_SELF(op0);\
-        func_pc += sizeof(binary_node_t);\
-        goto *(labels[*func_pc]);\
-     } else if (ABS(r) <= NumberMaxValue) {\
-        op0.x.f64 = r;\
-        MPUSH_SELF(op0);\
-        func_pc += sizeof(binary_node_t);\
-        goto *(labels[*func_pc]);\
-      }\
-    } else if (IS_NUMBER(op0.x.u64)) {\
-      r = (double)op0.x.i32 op op1.x.f64;\
-      if (r == 0) { \
-        op0.x.u64 = ((op0.x.i32 >= 0 && op1.x.f64 > 0) || (op0.x.i32 < 0 && op1.x.f64 < 0)) ?  POS_ZERO : NEG_ZERO;\
-        MPUSH_SELF(op0);\
-        func_pc += sizeof(binary_node_t);\
-        goto *(labels[*func_pc]);\
-      } else if (ABS(r) <= NumberMaxValue) {\
-        op0.x.f64 = r;\
-        MPUSH_SELF(op0);\
-        func_pc += sizeof(binary_node_t);\
-        goto *(labels[*func_pc]);\
-      }\
-    }\
-  }\
-}
-
 #define FAST_DIVISION() {\
   if (IS_NUMBER(op1.x.u64) && op1.x.i32 != 0) {\
     if (IS_NUMBER(op0.x.u64)) {\
@@ -546,40 +488,7 @@ inline bool PROP_CACHE_GET(TValue &obj, TValue &name, TValue &r) {
   return false;
 }
 
-// OP fusion for OP_regread OP_iassignfpoff RE_checkpoint OP_ireadfpoff sequence
-#define FUSE_REGREAD(r) \
-  if (!isEhHappend) { \
-    /* fuse next OP_iassignfpoffregread to reduce Retval0 overwrites */\
-    mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func_pc + sizeof(mre_instr_t))); \
-    if (stmt.op == RE_iassignfpoffregread) { \
-      func_pc += sizeof(mre_instr_t); \
-      DEBUGOPCODE(iassignfpoffregread, Stmt);\
-      uint8 *addr = frame_pointer + (int32_t)stmt.param.offset;\
-      CHECKREFERENCEMVALUE(r);\
-      TValue oldV = *((TValue*)addr);\
-      if (IS_NEEDRC(r.x.u64)) {\
-        GCIncRf((void *)r.x.c.payload);\
-      }\
-      if (IS_NEEDRC(oldV.x.u64)) {\
-        GCDecRf((void *)oldV.x.c.payload);\
-      }\
-      *(uint64_t *)addr = r.x.u64;\
-      if (!is_strict && (int32_t)stmt.param.offset > 0 && DynMFunction::is_jsargument(func.header)) {\
-        gInterSource->UpdateArguments((int32_t)stmt.param.offset / sizeof(void *) - 1, r);\
-      }\
-      func_pc += sizeof(base_node_t);\
-      mre_instr_t &stmt1 = *(reinterpret_cast<mre_instr_t *>(func_pc)); \
-      if (stmt1.op == RE_ireadfpoff && (int32_t)stmt.param.offset == (int32_t)stmt1.param.offset) { \
-        DEBUGOPCODE(ireadfpoff, Stmt);\
-         MPUSH(r); \
-         func_pc += sizeof(mre_instr_t); \
-      }\
-      goto *(labels[*func_pc]);\
-    }\
-  }
-
 #define SetRetval0(mv) {\
-  FUSE_REGREAD(mv);\
   TValue v = (mv);\
   if (IS_NEEDRC(v.x.u64))\
     GCIncRf((void *)(v).x.c.payload);\
@@ -730,7 +639,7 @@ static inline void intrinsicop1(int intrinsicId, TValue &v0, bool &isEhHappend, 
         break;
       }
       case INTRN_JSSTR_LENGTH: {
-        MASSERT(IS_ADDRBASE(v0.x.u64), "__jsstring * should be in address base");
+        MASSERT(IS_ADDRBASE(v0.x.u64) || IS_STRING(v0.x.u64), "__jsstring * should be in address base");
         v0 = __number_value(__jsstr_get_length((__jsstring *)v0.x.c.payload));
         break;
       }
@@ -878,6 +787,7 @@ TValue InvokeInterpretMethod(DynMFunction &func) {
     }
     DEBUGMETHODSYMBOL(func.header, "Running JavaScript method:", func.header->evalStackDepth);
     gInterSource->SetCurFunc(&func);
+    PROP_CACHE_INVALIDATE;
 
     // Get the first mir instruction of this method
     goto *(labels[((base_node_t *)func_pc)->op]);
@@ -1020,21 +930,28 @@ label_OP_regread:
   {
     // Handle expression node: regread
     mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func_pc));
+    PrimType exprPtyp = expr.primType;
     int32_t idx = (int32_t)expr.param.frameIdx;
     TValue r;
+    uint64_t flag = 0;
+    if (exprPtyp == PTY_simplestr) {
+      flag = NAN_STRING;
+    } else if (exprPtyp == PTY_simpleobj) {
+      flag = NAN_OBJECT;
+    }
 
     DEBUGSOPCODE(regread, Expr, idx);
     switch (idx) {
       case -kSregSp:{
-        r.x.u64 = (uint64_t)gInterSource->GetSPAddr() | NAN_SPBASE;
+        r.x.u64 = (uint64_t)gInterSource->GetSPAddr() | (flag == 0 ? NAN_SPBASE : flag);
         break;
       }
       case -kSregFp: {
-        r.x.u64 = (uint64_t)frame_pointer | NAN_FPBASE;
+        r.x.u64 = (uint64_t)frame_pointer | (flag == 0 ? NAN_FPBASE : flag);
         break;
       }
       case -kSregGp: {
-        r.x.u64 = (uint64_t)global_pointer | NAN_GPBASE;
+        r.x.u64 = (uint64_t)global_pointer | (flag == 0 ? NAN_GPBASE :flag);
         break;
       }
       case -kSregRetval0: {
@@ -1046,35 +963,6 @@ label_OP_regread:
         break;
       }
     }
-
-    // fuse OP_regread with OP_consval and OP_add
-    mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func_pc + sizeof(mre_instr_t)));
-    if (stmt.op == RE_constval && (IS_ADDRBASE(r.x.u64) || IS_NUMBER(r.x.u64) || IS_DOUBLE(r.x.u64))) {
-      mre_instr_t &stmt1 = *(reinterpret_cast<mre_instr_t *>(func_pc + (2 * sizeof(mre_instr_t))));
-      if (stmt1.op == RE_add) {
-        if (IS_ADDRBASE(r.x.u64)) {
-          r.x.u64 += (int64_t)stmt.param.constval.i16;
-        } else if (IS_NUMBER(r.x.u64)) {
-          int64_t rt = (int64_t)r.x.i32 + (int64_t)stmt.param.constval.i16;
-          if (ABS(rt) > INT_MAX)
-            r.x.f64 = (double)rt;
-          else
-            r.x.i32 = rt;
-        } else {
-          double rt;
-          rt = r.x.f64 + (double)stmt.param.constval.i16;
-          if (rt == 0) {
-            r.x.u64 = POS_ZERO;
-          } else {
-            r.x.f64 = rt;
-          }
-        }
-        func_pc = func_pc + sizeof(binary_node_t) + (2 *sizeof(mre_instr_t));
-        MPUSH(r);
-        goto *(labels[*func_pc]);
-      }
-    }
-
     MPUSH(r);
     func_pc += sizeof(mre_instr_t);
     goto *(labels[*func_pc]);
@@ -1121,9 +1009,6 @@ label_OP_constval:
             SetRetval0(op0);
             func_pc += sizeof(mre_instr_t);
             mre_instr_t &stmt1 = *(reinterpret_cast<mre_instr_t *>(func_pc));
-            if (stmt1.op == RE_regread) {
-              goto label_OP_regread;
-            }
             break;
           } else if (IS_DOUBLE(op0.x.u64)) {
             double r;
@@ -1725,6 +1610,16 @@ label_OP_mul:
             op0.x.i32 = op0.x.i32 * op1.x.i32;
             break;
           }
+          case PTY_simpleobj: {
+            TValue res;
+            bool isEhHappend = false;
+            void *newPc = nullptr;
+            try {
+              res = __jsop_object_mul(op0, op1);
+            }
+            OPCATCHANDGOON(binary_node_t);
+            break;
+          }
           default: {
             op0.x.c.payload = GET_PAYLOAD(op0) * GET_PAYLOAD(op1);
             break;
@@ -1836,6 +1731,16 @@ label_OP_div:
             op0.x.i32 = op0.x.i32 / op1.x.i32;
             break;
           }
+          case PTY_simpleobj: {
+            TValue res;
+            bool isEhHappend = false;
+            void *newPc = nullptr;
+            try {
+              res = __jsop_object_div(op0, op1);
+            }
+            OPCATCHANDGOON(binary_node_t);
+            break;
+          }
           default: {
             MIR_ASSERT(false);
           }
@@ -1899,7 +1804,6 @@ label_OP_rem:
             }
             OPCATCHANDGOON(binary_node_t);
             break;
-
           }
           default: {
             MIR_ASSERT(false);
@@ -2550,6 +2454,195 @@ label_OP_icall:
       func_pc += sizeof(mre_instr_t);
       goto *(labels[*func_pc]);
     }
+  }
+
+label_OP_getpropbyname:
+  {
+    // Handle statement node: getpropbyname (fusion)
+    DEBUGCOPCODE(getpropbyname, Stmt);
+    mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func_pc));
+    struct v { int16_t v0, v1, v2, v3; } values = *((struct v *)(func_pc + sizeof(base_node_t)));
+    func_pc += sizeof(struct v);
+    bool isEhHappend = false;
+    void *newPc = nullptr;
+    TValue v0, v1;
+    switch (stmt.param.value) {
+      case 0: { // intrinsiccall GETPROP_BY_NAME (ireadfpoff offset, add(regread %%GP, constval))
+        v0 = *(TValue *)(frame_pointer + values.v0);
+        v1.x.u64 = (uint64_t)(global_pointer + values.v1) | NAN_GPBASE;
+        break;
+      }
+      case 1: { // intrinsiccall GETPROP_BY_NAME (intrinsicop id (constval), add(regread %%GP, constval))
+        v0.x.u64 = values.v1 | NAN_NUMBER;
+        intrinsicop1(values.v0, v0, isEhHappend, newPc, func);
+        v1.x.u64 = (uint64_t)(global_pointer + values.v2) | NAN_GPBASE;
+        break;
+      }
+      case 2: { // intrinsiccall GETPROP_BY_NAME (intrinsicop id (add(regread %%GP, constval)), add(regread %%GP, constval))
+        v0.x.u64 = (uint64_t)(global_pointer + values.v1) | NAN_GPBASE;
+        intrinsicop1(values.v0, v0, isEhHappend, newPc, func);
+        v1.x.u64 = (uint64_t)(global_pointer + values.v2) | NAN_GPBASE;
+        break;
+      }
+      case 3: { // intrinsiccall GETPROP_BY_NAME (intrinsicop id, add(regread %%GP, constval))
+        v0 = intrinsicop0(values.v0, func);
+        v1.x.u64 = (uint64_t)(global_pointer + values.v1) | NAN_GPBASE;
+        break;
+      }
+      case 4: { // intrinsiccall GETPROP_BY_NAME (intrinsicop id (constval), intrinsicop id (constval))
+        v0.x.u64 = values.v1 | NAN_NUMBER;
+        intrinsicop1((uint16_t)values.v0 & 0xff, v0, isEhHappend, newPc, func);
+        v1.x.u64 = values.v2 | NAN_NUMBER;
+        intrinsicop1((uint16_t)values.v0 >> 8, v1, isEhHappend, newPc, func);
+        break;
+      }
+      case 5: { // intrinsiccall GETPROP_BY_NAME (ireadoff offset(regread %%GP), intrinsicop id (constval))
+        v0.x.u64 = *(uint64_t*)(global_pointer + values.v0);
+        v1.x.u64 = values.v2 | NAN_NUMBER;
+        intrinsicop1(values.v1, v1, isEhHappend, newPc, func);
+        break;
+      }
+      case 6: { // intrinsiccall GETPROP_BY_NAME (ireadfpoff(offset), intrinsicop id (constval))
+        v0 = *(TValue *)(frame_pointer + values.v0);
+        v1.x.u64 = values.v2 | NAN_NUMBER;
+        intrinsicop1(values.v1, v1, isEhHappend, newPc, func);
+        break;
+      }
+      case 10: { // intrinsiccall GET_THIS_PROP_BY_NAME (add(regread %%GP, constval))
+        v0.x.u64 = (uint64_t)(global_pointer + values.v0) | NAN_GPBASE;
+        if (!PROP_CACHE_GET(__js_Global_ThisBinding, v0, v0)) {
+          v0 = gInterSource->JSopGetThisPropByName(v0);
+          PROP_CACHE_SET(__js_Global_ThisBinding, v0, v0);
+        }
+        MPUSH(v0);
+        func_pc += sizeof(mre_instr_t);
+        goto *(labels[*func_pc]);
+      }
+      default:
+        MASSERT(false, "Not supported OP_getpropbyname variation");
+    }
+    TValue retMv;
+    CHECKREFERENCEMVALUE(v0);
+    if (!PROP_CACHE_GET(v0, v1, retMv)) {
+      try {
+        retMv = gInterSource->JSopGetPropByName(v0, v1);
+        PROP_CACHE_SET(v0, v1, retMv);
+      }
+      CATCHINTRINSICOP();
+    }
+    uint8 *addr = frame_pointer + (int32_t)stmt.param.offset;
+    if (values.v3 != 0) {
+      // followed by iassignfpoff dynany N (regread dynany %%retval0)
+      uint8 *addr = frame_pointer + values.v3;
+      TValue oldV = *((TValue*)addr);
+      if (IS_NEEDRC(retMv.x.u64)) {
+        GCIncRf((void *)retMv.x.c.payload);
+      }
+      if (IS_NEEDRC(oldV.x.u64)) {
+        GCDecRf((void *)oldV.x.c.payload);
+      }
+      *(uint64_t *)addr = retMv.x.u64;
+      if (!is_strict && (int32_t)values.v3 > 0 && DynMFunction::is_jsargument(func.header)) {
+        gInterSource->UpdateArguments((int32_t)values.v3 / sizeof(void *) - 1, retMv);
+      }
+    } else {
+      SetRetval0(retMv);
+    }
+    if (newPc) {
+      func_pc = (uint8_t *)newPc;
+      goto *(labels[*(uint8_t *)newPc]);
+    }
+    if (isEhHappend) {
+      gInterSource->InsertEplog();
+      func.pc = func_pc;
+      func.sp = func_sp;
+      return __none_value(Exec_handle_exc);
+    }
+
+    func_pc += sizeof(mre_instr_t);
+    goto *(labels[*func_pc]);
+  }
+
+label_OP_setpropbyname:
+  {
+    // Handle statement node: setpropbyname (fusion)
+    DEBUGCOPCODE(setpropbyname, Stmt);
+    mre_instr_t &stmt = *(reinterpret_cast<mre_instr_t *>(func_pc));
+    struct v { int16_t v0, v1, v2, v3; } values = *((struct v *)(func_pc + sizeof(base_node_t)));
+    func_pc += sizeof(struct v);
+    bool isEhHappend = false;
+    void *newPc = nullptr;
+    TValue v0, v1;
+    TValue &v2 = MPOP();
+    switch (stmt.param.value) {
+      case 0: { // intrinsiccall SETPROP_BY_NAME (ireadfpoff offset, add(regread %%GP, constval), x)
+        uint8_t *addr = frame_pointer + values.v1;
+        uint64_t lValue = *((uint64_t *)addr);
+        if (lValue == 0) {
+          lValue = NAN_NONE; // NONE value
+        }
+        v0.x.u64 = lValue;
+        v1.x.u64 = (uint64_t)(global_pointer + values.v2) | NAN_GPBASE;
+        break;
+      }
+      case 1: { // intrinsiccall SETPROP_BY_NAME (intrinsicop id, add(regread %%GP, constval), x)
+        v0 = intrinsicop0(values.v0, func);
+        v1.x.u64 = (uint64_t)(global_pointer + values.v1) | NAN_GPBASE;
+        break;
+      }
+      case 2: { // intrinsiccall SETPROP_BY_NAME (intrinsicop id (add(regread %%GP, constval)), add(regread %%GP, constval), x)
+        v0.x.u64 = (uint64_t)(global_pointer + values.v1) | NAN_GPBASE;
+        intrinsicop1(values.v0, v0, isEhHappend, newPc, func);
+        v1.x.u64 = (uint64_t)(global_pointer + values.v2) | NAN_GPBASE;
+        break;
+      }
+      case 10: { // intrinsiccall SET_THIS_PROP_BY_NAME (add(regread %%GP, constval), x)
+        v1.x.u64 = (uint64_t)(global_pointer + values.v0) | NAN_GPBASE;
+        CHECKREFERENCEMVALUE(v2);
+        try {
+          v0 = __js_Global_ThisBinding;
+          __jsstring *s1 = (__jsstring *)v1.x.c.payload;
+          if (is_strict && (__is_undefined(__js_ThisBinding) ||
+                __js_SameValue(__js_Global_ThisBinding, __js_ThisBinding)) &&
+            __jsstr_throw_typeerror(s1)) {
+            MAPLE_JS_TYPEERROR_EXCEPTION();
+          }
+          __jsop_set_this_prop_by_name(v0, s1, v2, true);
+          PROP_CACHE_SET(v0, v1, v2);
+        }
+        CATCHINTRINSICOP();
+        goto label_setpropbyname_check;
+      }
+      default:
+        MASSERT(false, "Not supported OP_setpropbyname variation");
+    }
+    CHECKREFERENCEMVALUE(v0);
+    try {
+      __jsstring *s1 = (__jsstring *)v1.x.c.payload;
+      if (v0.x.u64 == __js_Global_ThisBinding.x.u64 &&
+        __is_global_strict && __jsstr_throw_typeerror(s1)) {
+        MAPLE_JS_TYPEERROR_EXCEPTION();
+      }
+      if (__jsop_setprop_by_name(v0, s1, v2, is_strict)) {
+        PROP_CACHE_SET(v0, v1, v2);
+      } else {
+        PROP_CACHE_RESET(v0, v1);
+      }
+    }
+    CATCHINTRINSICOP();
+label_setpropbyname_check:
+    if (newPc) {
+      func_pc = (uint8_t *)newPc;
+      goto *(labels[*(uint8_t *)newPc]);
+    }
+    if (isEhHappend) {
+      gInterSource->InsertEplog();
+      func.pc = func_pc;
+      func.sp = func_sp;
+      return __none_value(Exec_handle_exc);
+    }
+    func_pc += sizeof(mre_instr_t);
+    goto *(labels[*func_pc]);
   }
 
 label_OP_intrinsiccall:
@@ -3566,18 +3659,30 @@ label_OP_intrinsicopireadfpoff:
     bool isEhHappend = false;
     void *newPc = nullptr;
     TValue v0 = {.x.u64 = *((uint64_t *)addr)};
-    // only for ops with 1 argument
-    intrinsicop1(intrinsicId, v0, isEhHappend, newPc, func);
-    if (newPc) {
-      func_sp--;
-      func_pc = (uint8_t *)newPc;
-      goto *(labels[*(uint8_t *)newPc]);
+    if (v0.x.u64 == 0) {
+      v0.x.u64 = NAN_NONE; // NONE value
     }
-    if (isEhHappend) {
-      gInterSource->InsertEplog();
-      func.pc = func_pc;
-      func.sp = func_sp;
-      return __none_value(Exec_handle_exc);
+    if (intrinsicId == INTRN_JS_BOOLEAN ) {
+      if (!IS_BOOLEAN(v0.x.u64)) {
+          CHECKREFERENCEMVALUE(v0);
+          v0 = gInterSource->JSBoolean(v0);
+      }
+    } else {
+      if (intrinsicId != INTRN_JS_NUMBER || (!IS_NUMBER(v0.x.u64) && !IS_DOUBLE(v0.x.u64))) {
+        // only for ops with 1 argument
+        intrinsicop1(intrinsicId, v0, isEhHappend, newPc, func);
+        if (newPc) {
+          func_sp--;
+          func_pc = (uint8_t *)newPc;
+          goto *(labels[*(uint8_t *)newPc]);
+        }
+        if (isEhHappend) {
+          gInterSource->InsertEplog();
+          func.pc = func_pc;
+          func.sp = func_sp;
+          return __none_value(Exec_handle_exc);
+        }
+      }
     }
     MPUSH(v0);
     func_pc += sizeof(mre_instr_t);
@@ -3739,15 +3844,49 @@ label_OP_iassignfpoffregread:
     TValue &rVal = gInterSource->retVal0;
     CHECKREFERENCEMVALUE(rVal);
     TValue oldV = *((TValue*)addr);
-    if (IS_NEEDRC(rVal.x.u64)) {
-      GCIncRf((void *)rVal.x.c.payload);
-    }
-    if (IS_NEEDRC(oldV.x.u64)) {
-      GCDecRf((void *)oldV.x.c.payload);
-    }
-    *(uint64_t *)addr = rVal.x.u64;
-    if (!is_strict && (int32_t)stmt.param.offset > 0 && DynMFunction::is_jsargument(func.header)) {
-      gInterSource->UpdateArguments((int32_t)stmt.param.offset / sizeof(void *) - 1, rVal);
+    switch(stmt.primType) {
+      case PTY_u1: {
+        uint8_t u8 = rVal.x.u8;
+        uint8_t oldU8 = *(uint8_t *)addr;
+        *(uint8_t *)addr = (oldU8 & 0xfe) | (u8 & 0x1);
+        break;
+      }
+      case PTY_u8: {
+        *(uint8_t *)addr = rVal.x.u8;
+        break;
+      }
+      case PTY_i8: {
+        *(int8_t *)addr = rVal.x.i8;
+        break;
+      }
+      case PTY_i16: {
+        *(int16_t *)addr = rVal.x.i16;
+        break;
+      }
+      case PTY_i32: {
+        *(int32_t *)addr = rVal.x.i32;
+        break;
+      }
+      case PTY_u16: {
+        *(uint16_t *)addr = rVal.x.u16;
+        break;
+      }
+      case PTY_u32: {
+        *(uint32_t *)addr = rVal.x.u32;
+        break;
+      }
+      default: {
+        if (IS_NEEDRC(rVal.x.u64)) {
+          GCIncRf((void *)rVal.x.c.payload);
+        }
+        if (IS_NEEDRC(oldV.x.u64)) {
+          GCDecRf((void *)oldV.x.c.payload);
+        }
+        *(uint64_t *)addr = rVal.x.u64;
+        if (!is_strict && (int32_t)stmt.param.offset > 0 && DynMFunction::is_jsargument(func.header)) {
+          gInterSource->UpdateArguments((int32_t)stmt.param.offset / sizeof(void *) - 1, rVal);
+        }
+      }
     }
     func_pc += sizeof(base_node_t);
     goto *(labels[*func_pc]);

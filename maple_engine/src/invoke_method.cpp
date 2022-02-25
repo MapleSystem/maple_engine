@@ -1896,6 +1896,8 @@ label_OP_iassignfpoffconstval:
 label_OP_iassignfpoffregread:
 label_OP_intrinsicopconstval:
 label_OP_intrinsicopireadfpoff:
+label_OP_getpropbyname:
+label_OP_setpropbyname:
     // Not supported yet: intrinsicopwithtype
     DEBUGOPCODE(fieldsdist, Unused);
     MASSERT(false, "Not supported yet");
