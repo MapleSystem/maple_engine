@@ -108,7 +108,6 @@ static void PrintUncaughtException(__jsstring *msg) {
 #define ABS(v) ((((v) < 0) ? -(v) : (v)))
 
 #define MPUSH_SELF(v)   {++func_sp;}
-
 #define MPUSHV(v)  (func_operand_stack[++func_sp].x.u64 = (v))
 #define MPUSH(v)   (func_operand_stack[++func_sp] = v)
 #define MPOP()     (func_operand_stack[func_sp--])
@@ -119,49 +118,70 @@ static void PrintUncaughtException(__jsstring *msg) {
 #define THROWVAL   (func_operand_stack[1])
 #define MLOCALS(x) (func_operand_stack[x])
 
-#define FAST_COMPARE(o) {\
-  if ((IS_NUMBER_OR_BOOL(mVal0.x.u64)) && (IS_NUMBER_OR_BOOL(mVal1.x.u64))) {\
-    bool rt = (mVal0.x.i32 o mVal1.x.i32);\
-    func_pc += sizeof(mre_instr_t);\
-    condgoto_stmt_t &stmt1 = *(reinterpret_cast<condgoto_stmt_t *>(func_pc));\
-    if (stmt1.op == (maple::Opcode)RE_brtrue32) {\
-      if(rt)\
-        func_pc = (uint8_t*)&stmt1.offset + stmt1.offset;\
-      else\
-        func_pc += sizeof(condgoto_stmt_t);\
-      goto *(labels[*func_pc]);\
-    } else if (stmt1.op == (maple::Opcode)RE_brfalse32) {\
-      if(rt)\
-        func_pc += sizeof(condgoto_stmt_t);\
-      else\
-        func_pc = (uint8_t*)&stmt1.offset + stmt1.offset;\
-      goto *(labels[*func_pc]);\
-    } else {\
-      mVal0.x.u64 = rt | NAN_BOOLEAN;\
-      MPUSH_SELF(mVal0);\
-      goto *(labels[*func_pc]);\
+#define FAST_COMPARE(o) \
+  bool done = true;\
+  switch (expr.param.type.opPtyp) {\
+    case PTY_u1:\
+    case PTY_u8: {\
+      mVal0.x.u64 = (mVal0.x.u8 o mVal1.x.u8);\
+      break;\
     }\
-  } else if (IS_DOUBLE(mVal0.x.u64)) {\
-    if (IS_DOUBLE(mVal1.x.u64)) {\
-      mVal0.x.u64 = (mVal0.x.f64 o mVal1.x.f64) | NAN_BOOLEAN;\
-      MPUSH_SELF(mVal0);\
-      func_pc += sizeof(mre_instr_t);\
-      goto *(labels[*func_pc]);\
-    } else if (IS_NUMBER_OR_BOOL(mVal1.x.u64)) {\
-      mVal0.x.u64 = (mVal0.x.f64 o (double)mVal1.x.i32) | NAN_BOOLEAN;\
-      MPUSH_SELF(mVal0);\
-      func_pc += sizeof(mre_instr_t);\
-      goto *(labels[*func_pc]);\
+    case PTY_u16: {\
+      mVal0.x.u64 = (mVal0.x.u16 o mVal1.x.u16);\
+      break;\
     }\
-  } else if (IS_DOUBLE(mVal1.x.u64)) {\
-    if (IS_NUMBER_OR_BOOL(mVal0.x.u64)) {\
-      mVal0.x.u64 = ((double)mVal0.x.i32 o mVal1.x.f64) | NAN_BOOLEAN;\
-      MPUSH_SELF(mVal0);\
-      func_pc += sizeof(mre_instr_t);\
-      goto *(labels[*func_pc]);\
+    case PTY_u32: {\
+      mVal0.x.u64 = (mVal0.x.u32 o mVal1.x.u32);\
+      break;\
+    }\
+    case PTY_i16: {\
+      mVal0.x.u64 = (mVal0.x.i16 o mVal1.x.i16);\
+      break;\
+    }\
+    case PTY_i32: {\
+      mVal0.x.u64 = (mVal0.x.i32 o mVal1.x.i32);\
+      break;\
+    }\
+    default: {\
+      if ((IS_NUMBER_OR_BOOL(mVal0.x.u64)) && (IS_NUMBER_OR_BOOL(mVal1.x.u64))) {\
+        mVal0.x.u64 = (mVal0.x.i32 o mVal1.x.i32);\
+      } else if (IS_DOUBLE(mVal0.x.u64)) {\
+        if (IS_DOUBLE(mVal1.x.u64)) {\
+          mVal0.x.u64 = (mVal0.x.f64 o mVal1.x.f64);\
+        } else if (IS_NUMBER_OR_BOOL(mVal1.x.u64)) {\
+          mVal0.x.u64 = (mVal0.x.f64 o (double)mVal1.x.i32);\
+        } else {\
+          done = false;\
+        }\
+      } else if (IS_DOUBLE(mVal1.x.u64) && IS_NUMBER_OR_BOOL(mVal0.x.u64)) {\
+          mVal0.x.u64 = ((double)mVal0.x.i32 o mVal1.x.f64);\
+      } else {\
+        done = false;\
+      }\
+      break;\
     }\
   }\
+
+#define FAST_COMPARE_GOTO(o) {\
+  FAST_COMPARE(o)\
+  if (done) {\
+    mVal0.x.u64 |= NAN_BOOLEAN ;\
+    MPUSH_SELF(mVal0);\
+    func_pc += sizeof(mre_instr_t);\
+    goto *(labels[*func_pc]);\
+  }\
 }
+
+#define FAST_COMPARE_BR(o, t) {\
+  FAST_COMPARE(o)\
+  if (done) {\
+    if (mVal0.x.u1 == (t)) \
+      func_pc = (uint8_t*)&stmt.offset + stmt.offset; \
+    else \
+      func_pc += sizeof(condgoto_stmt_t); \
+    goto *(labels[*func_pc]);\
+  }\
+}\
 
 #define FAST_MATH(op) {\
   if (IS_NUMBER(op1.x.u64)) {\
@@ -323,9 +343,7 @@ static void PrintUncaughtException(__jsstring *msg) {
     op0 = gInterSource->JSopArith(op0, op1, expr.primType, (Opcode)expr.op); \
     MPUSH_SELF(op0);}
 
-
-
-#define OPCATCHANDGOON(instrt) \
+#define OPCATCH() \
     catch (const char *estr) { \
       isEhHappend = true; \
       if (!strcmp(estr, "callee exception")) { \
@@ -348,11 +366,32 @@ static void PrintUncaughtException(__jsstring *msg) {
         gInterSource->currEH->UpdateState(OP_throw); \
         newPc = gInterSource->currEH->GetEHpc(&func); \
       } \
-    } \
+    }
+
+#define OPCATCHANDGOON(instrt) \
+    OPCATCH() \
     if (!isEhHappend) { \
       MPUSH(res); \
       func_pc += sizeof(instrt); \
       goto *(labels[*func_pc]); \
+    } else { \
+      if (newPc) { \
+        func_pc = (uint8_t *)newPc; \
+        goto *(labels[*(uint8_t *)newPc]); \
+      } else { \
+        gInterSource->InsertEplog(); \
+        return __none_value(Exec_handle_exc);\
+      } \
+    } \
+
+#define OPCATCHANDBR(t) \
+    OPCATCH() \
+    if (!isEhHappend) { \
+      if (res.x.u1 == (t)) \
+        func_pc = (uint8_t*)&stmt.offset + stmt.offset; \
+      else \
+        func_pc += sizeof(condgoto_stmt_t); \
+      goto *(labels[*func_pc]);\
     } else { \
       if (newPc) { \
         func_pc = (uint8_t *)newPc; \
@@ -385,34 +424,6 @@ static void PrintUncaughtException(__jsstring *msg) {
         gInterSource->currEH->SetThrownval(m); \
         gInterSource->currEH->UpdateState(OP_throw); \
         newPc = gInterSource->currEH->GetEHpc(&func); \
-      } \
-    } \
-
-#define OPCATCHBINARY() \
-    catch (const char *estr) { \
-      isEhHappend = true; \
-      if (!strcmp(estr, "callee exception")) { \
-        if (!gInterSource->currEH) { \
-          fprintf(stderr, "eh thown but never catched"); \
-        } else { \
-          isEhHappend = true; \
-          newPc = gInterSource->currEH->GetEHpc(&func); \
-        } \
-      } else { \
-        MASSERT(false, "NYI"); \
-      } \
-    } \
-    if (!isEhHappend) { \
-      MPUSH(res); \
-      func_pc += sizeof(binary_node_t); \
-      goto *(labels[*func_pc]); \
-    } else { \
-      if (newPc) { \
-        func_pc = (uint8_t *)newPc; \
-        goto *(labels[*(uint8_t *)newPc]); \
-      } else { \
-        gInterSource->InsertEplog(); \
-        return __none_value(Exec_handle_exc);\
       } \
     } \
 
@@ -1146,58 +1157,6 @@ label_OP_constval64:
       }
     }
 
-    if (IS_NUMBER(res.x.u64)) {
-      if (stmt.op >= RE_eq && stmt.op <= RE_ne) {
-        // fuse OP_lt/OP_gt/(other comparisons) OP_brtrue32/OP_brfalse32
-        TValue  &mVal0 = MTOP();
-        if ((IS_NUMBER(mVal0.x.u64))) {
-          bool rt;
-          switch (stmt.op) {
-          case RE_lt:
-            rt = (mVal0.x.i32 < res.x.i32);
-            break;
-          case RE_gt:
-            rt = (mVal0.x.i32 > res.x.i32);
-            break;
-          case RE_le:
-            rt = (mVal0.x.i32 <= res.x.i32);
-            break;
-          case RE_ge:
-            rt = (mVal0.x.i32 >= res.x.i32);
-            break;
-          case RE_eq:
-            rt = (mVal0.x.i32 == res.x.i32);
-            break;
-          case RE_ne:
-            rt = (mVal0.x.i32 != res.x.i32);
-            break;
-          default:
-            MAPLE_JS_ASSERT(false);
-            break;
-          }
-          func_pc += sizeof(mre_instr_t);
-          condgoto_stmt_t &stmt1 = *(reinterpret_cast<condgoto_stmt_t *>(func_pc));
-          if (stmt1.op == (maple::Opcode)RE_brtrue32) {
-            func_sp--;
-            if(rt)
-              func_pc = (uint8_t*)&stmt1.offset + stmt1.offset;
-            else
-              func_pc += sizeof(condgoto_stmt_t);
-            goto *(labels[*func_pc]);
-          } else if (stmt1.op == (maple::Opcode)RE_brfalse32) {
-            func_sp--;
-            if(rt)
-              func_pc += sizeof(condgoto_stmt_t);
-            else
-              func_pc = (uint8_t*)&stmt1.offset + stmt1.offset;
-            goto *(labels[*func_pc]);
-          } else {
-            mVal0.x.u64 = rt | NAN_BOOLEAN;
-            goto *(labels[*func_pc]);
-          }
-        }
-      }
-    }
     MPUSH(res);
     goto *(labels[*func_pc]);
   }
@@ -1555,6 +1514,10 @@ label_OP_sub:
             OPCATCHANDGOON(binary_node_t);
             break;
           }
+          case PTY_f64: {
+            op0.x.f64 = op0.x.f64 - op1.x.f64;
+            break;
+          }
           default: {
             MIR_ASSERT(false);
           }
@@ -1728,7 +1691,12 @@ label_OP_div:
             break;
           }
           case PTY_i32: {
-            op0.x.i32 = op0.x.i32 / op1.x.i32;
+            int32_t x1 = op1.x.i32;
+            if (x1 == 0) {
+              op0 = (op0.x.i32 >= 0 ? __number_infinity() : __number_neg_infinity());
+            } else {
+              op0.x.i32 = op0.x.i32 / x1;
+            }
             break;
           }
           case PTY_simpleobj: {
@@ -1895,6 +1863,27 @@ label_OP_CG_array_elem_add:
     goto *(labels[*func_pc]);
   }
 
+label_OP_eqbr:
+  {
+    // Handle statement node: eqbr
+    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func_pc));
+    condgoto_stmt_t &stmt = *(reinterpret_cast<condgoto_stmt_t *>(func_pc));
+    DEBUGOPCODE(eqbr, Expr);
+
+    TValue  &mVal1 = MPOP();
+    TValue  &mVal0 = MPOP();
+    FAST_COMPARE_BR(== , expr.param.type.numOpnds);
+    CHECKREFERENCEMVALUE(mVal1);
+    CHECKREFERENCEMVALUE(mVal0);
+    bool isEhHappend = false;
+    void *newPc = nullptr;
+    TValue res;
+    try {
+      res = gInterSource->JSopCmp(mVal0, mVal1, OP_eq, expr.primType);
+    }
+    OPCATCHANDBR(expr.param.type.numOpnds);
+  }
+
 label_OP_eq:
   {
     // Handle expression node: eq
@@ -1902,52 +1891,39 @@ label_OP_eq:
     DEBUGOPCODE(eq, Expr);
     TValue  &mVal1 = MPOP();
     TValue  &mVal0 = MPOP();
-    switch (expr.param.type.opPtyp) {
-      case PTY_u1:
-      case PTY_u8: {
-        mVal0.x.u64 = (mVal0.x.u8 == mVal1.x.u8) | NAN_BOOLEAN ;
-        MPUSH_SELF(mVal0);
-        func_pc += sizeof(mre_instr_t);
-        goto *(labels[*func_pc]);
-      }
-      case PTY_u16: {
-        mVal0.x.u64 = (mVal0.x.u16 == mVal1.x.u16) | NAN_BOOLEAN ;
-        MPUSH_SELF(mVal0);
-        func_pc += sizeof(mre_instr_t);
-        goto *(labels[*func_pc]);
-      }
-      case PTY_u32: {
-        mVal0.x.u64 = (mVal0.x.u32 == mVal1.x.u32) | NAN_BOOLEAN ;
-        MPUSH_SELF(mVal0);
-        func_pc += sizeof(mre_instr_t);
-        goto *(labels[*func_pc]);
-      }
-      case PTY_i16: {
-        mVal0.x.u64 = (mVal0.x.i16 == mVal1.x.i16) | NAN_BOOLEAN ;
-        MPUSH_SELF(mVal0);
-        func_pc += sizeof(mre_instr_t);
-        goto *(labels[*func_pc]);
-      }
-      case PTY_i32: {
-        mVal0.x.u64 = (mVal0.x.i32 == mVal1.x.i32) | NAN_BOOLEAN ;
-        MPUSH_SELF(mVal0);
-        func_pc += sizeof(mre_instr_t);
-        goto *(labels[*func_pc]);
-      }
-      default: {
-        FAST_COMPARE(==);
-        CHECKREFERENCEMVALUE(mVal1);
-        CHECKREFERENCEMVALUE(mVal0);
-        bool isEhHappend = false;
-        void *newPc = nullptr;
-        TValue res;
-        try {
-          res = gInterSource->JSopCmp(mVal0, mVal1, OP_eq, expr.primType);
-        }
-        OPCATCHANDGOON(mre_instr_t);
-      }
+    FAST_COMPARE_GOTO(==);
+    CHECKREFERENCEMVALUE(mVal1);
+    CHECKREFERENCEMVALUE(mVal0);
+    bool isEhHappend = false;
+    void *newPc = nullptr;
+    TValue res;
+    try {
+      res = gInterSource->JSopCmp(mVal0, mVal1, OP_eq, expr.primType);
     }
+    OPCATCHANDGOON(mre_instr_t);
   }
+
+label_OP_gebr:
+  {
+    // Handle statement node: gebr
+    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func_pc));
+    condgoto_stmt_t &stmt = *(reinterpret_cast<condgoto_stmt_t *>(func_pc));
+    DEBUGOPCODE(gebr, Expr);
+
+    TValue  &mVal1 = MPOP();
+    TValue  &mVal0 = MPOP();
+    FAST_COMPARE_BR(>= , expr.param.type.numOpnds);
+    CHECKREFERENCEMVALUE(mVal1);
+    CHECKREFERENCEMVALUE(mVal0);
+    bool isEhHappend = false;
+    void *newPc = nullptr;
+    TValue res;
+    try {
+      res = gInterSource->JSopCmp(mVal0, mVal1, OP_ge, expr.primType);
+    }
+    OPCATCHANDBR(expr.param.type.numOpnds);
+  }
+
 label_OP_ge:
   {
     // Handle expression node: ge
@@ -1955,7 +1931,7 @@ label_OP_ge:
     DEBUGOPCODE(ge, Expr);
     TValue  &mVal1 = MPOP();
     TValue  &mVal0 = MPOP();
-    FAST_COMPARE(>=);
+    FAST_COMPARE_GOTO(>=);
     CHECKREFERENCEMVALUE(mVal1);
     CHECKREFERENCEMVALUE(mVal0);
     bool isEhHappend = false;
@@ -1967,6 +1943,27 @@ label_OP_ge:
     OPCATCHANDGOON(mre_instr_t);
   }
 
+label_OP_gtbr:
+  {
+    // Handle statement node: gtbr
+    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func_pc));
+    condgoto_stmt_t &stmt = *(reinterpret_cast<condgoto_stmt_t *>(func_pc));
+    DEBUGOPCODE(gtbr, Expr);
+
+    TValue  &mVal1 = MPOP();
+    TValue  &mVal0 = MPOP();
+    FAST_COMPARE_BR(> , expr.param.type.numOpnds);
+    CHECKREFERENCEMVALUE(mVal1);
+    CHECKREFERENCEMVALUE(mVal0);
+    bool isEhHappend = false;
+    void *newPc = nullptr;
+    TValue res;
+    try {
+      res = gInterSource->JSopCmp(mVal0, mVal1, OP_gt, expr.primType);
+    }
+    OPCATCHANDBR(expr.param.type.numOpnds);
+  }
+
 label_OP_gt:
   {
     // Handle expression node: gt
@@ -1974,7 +1971,7 @@ label_OP_gt:
     DEBUGOPCODE(gt, Expr);
     TValue  &mVal1 = MPOP();
     TValue  &mVal0 = MPOP();
-    FAST_COMPARE(>);
+    FAST_COMPARE_GOTO(>);
     CHECKREFERENCEMVALUE(mVal1);
     CHECKREFERENCEMVALUE(mVal0);
     bool isEhHappend = false;
@@ -1986,6 +1983,27 @@ label_OP_gt:
     OPCATCHANDGOON(mre_instr_t);
   }
 
+label_OP_lebr:
+  {
+    // Handle statement node: lebr
+    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func_pc));
+    condgoto_stmt_t &stmt = *(reinterpret_cast<condgoto_stmt_t *>(func_pc));
+    DEBUGOPCODE(lebr, Expr);
+
+    TValue  &mVal1 = MPOP();
+    TValue  &mVal0 = MPOP();
+    FAST_COMPARE_BR(<= , expr.param.type.numOpnds);
+    CHECKREFERENCEMVALUE(mVal1);
+    CHECKREFERENCEMVALUE(mVal0);
+    bool isEhHappend = false;
+    void *newPc = nullptr;
+    TValue res;
+    try {
+      res = gInterSource->JSopCmp(mVal0, mVal1, OP_le, expr.primType);
+    }
+    OPCATCHANDBR(expr.param.type.numOpnds);
+  }
+
 label_OP_le:
   {
     // Handle expression node: le
@@ -1993,51 +2011,37 @@ label_OP_le:
     DEBUGOPCODE(le, Expr);
     TValue  &mVal1 = MPOP();
     TValue  &mVal0 = MPOP();
-    switch (expr.param.type.opPtyp) {
-      case PTY_u1:
-      case PTY_u8: {
-        mVal0.x.u64 = (mVal0.x.u8 <= mVal1.x.u8) | NAN_BOOLEAN ;
-        MPUSH_SELF(mVal0);
-        func_pc += sizeof(mre_instr_t);
-        goto *(labels[*func_pc]);
-      }
-      case PTY_u16: {
-        mVal0.x.u64 = (mVal0.x.u16 <= mVal1.x.u16) | NAN_BOOLEAN ;
-        MPUSH_SELF(mVal0);
-        func_pc += sizeof(mre_instr_t);
-        goto *(labels[*func_pc]);
-      }
-      case PTY_u32: {
-        mVal0.x.u64 = (mVal0.x.u32 <= mVal1.x.u32) | NAN_BOOLEAN ;
-        MPUSH_SELF(mVal0);
-        func_pc += sizeof(mre_instr_t);
-        goto *(labels[*func_pc]);
-      }
-      case PTY_i16: {
-        mVal0.x.u64 = (mVal0.x.i16 <= mVal1.x.i16) | NAN_BOOLEAN ;
-        MPUSH_SELF(mVal0);
-        func_pc += sizeof(mre_instr_t);
-        goto *(labels[*func_pc]);
-      }
-      case PTY_i32: {
-        mVal0.x.u64 = (mVal0.x.i32 <= mVal1.x.i32) | NAN_BOOLEAN ;
-        MPUSH_SELF(mVal0);
-        func_pc += sizeof(mre_instr_t);
-        goto *(labels[*func_pc]);
-      }
-      default: {
-        FAST_COMPARE(<=);
-        CHECKREFERENCEMVALUE(mVal1);
-        CHECKREFERENCEMVALUE(mVal0);
-        bool isEhHappend = false;
-        void *newPc = nullptr;
-        TValue res;
-        try {
-          res = gInterSource->JSopCmp(mVal0, mVal1, OP_le, expr.primType);
-        }
-        OPCATCHANDGOON(mre_instr_t);
-      }
+    FAST_COMPARE_GOTO(<=);
+    CHECKREFERENCEMVALUE(mVal1);
+    CHECKREFERENCEMVALUE(mVal0);
+    bool isEhHappend = false;
+    void *newPc = nullptr;
+    TValue res;
+    try {
+      res = gInterSource->JSopCmp(mVal0, mVal1, OP_le, expr.primType);
     }
+    OPCATCHANDGOON(mre_instr_t);
+  }
+
+label_OP_ltbr:
+  {
+    // Handle statement node: ltbr
+    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func_pc));
+    condgoto_stmt_t &stmt = *(reinterpret_cast<condgoto_stmt_t *>(func_pc));
+    DEBUGOPCODE(ltbr, Expr);
+
+    TValue  &mVal1 = MPOP();
+    TValue  &mVal0 = MPOP();
+    FAST_COMPARE_BR(< , expr.param.type.numOpnds);
+    CHECKREFERENCEMVALUE(mVal1);
+    CHECKREFERENCEMVALUE(mVal0);
+    bool isEhHappend = false;
+    void *newPc = nullptr;
+    TValue res;
+    try {
+      res = gInterSource->JSopCmp(mVal0, mVal1, OP_lt, expr.primType);
+    }
+    OPCATCHANDBR(expr.param.type.numOpnds);
   }
 
 label_OP_lt:
@@ -2047,51 +2051,37 @@ label_OP_lt:
     DEBUGOPCODE(lt, Expr);
     TValue  &mVal1 = MPOP();
     TValue  &mVal0 = MPOP();
-    switch (expr.param.type.opPtyp) {
-      case PTY_u1:
-      case PTY_u8: {
-        mVal0.x.u64 = (mVal0.x.u8 < mVal1.x.u8) | NAN_BOOLEAN ;
-        MPUSH_SELF(mVal0);
-        func_pc += sizeof(mre_instr_t);
-        goto *(labels[*func_pc]);
-      }
-      case PTY_u16: {
-        mVal0.x.u64 = (mVal0.x.u16 < mVal1.x.u16) | NAN_BOOLEAN ;
-        MPUSH_SELF(mVal0);
-        func_pc += sizeof(mre_instr_t);
-        goto *(labels[*func_pc]);
-      }
-      case PTY_u32: {
-        mVal0.x.u64 = (mVal0.x.u32 < mVal1.x.u32) | NAN_BOOLEAN ;
-        MPUSH_SELF(mVal0);
-        func_pc += sizeof(mre_instr_t);
-        goto *(labels[*func_pc]);
-      }
-      case PTY_i16: {
-        mVal0.x.u64 = (mVal0.x.i16 < mVal1.x.i16) | NAN_BOOLEAN ;
-        MPUSH_SELF(mVal0);
-        func_pc += sizeof(mre_instr_t);
-        goto *(labels[*func_pc]);
-      }
-      case PTY_i32: {
-        mVal0.x.u64 = (mVal0.x.i32 < mVal1.x.i32) | NAN_BOOLEAN ;
-        MPUSH_SELF(mVal0);
-        func_pc += sizeof(mre_instr_t);
-        goto *(labels[*func_pc]);
-      }
-      default: {
-        FAST_COMPARE(<);
-        CHECKREFERENCEMVALUE(mVal1);
-        CHECKREFERENCEMVALUE(mVal0);
-        bool isEhHappend = false;
-        void *newPc = nullptr;
-        TValue res;
-        try {
-          res = gInterSource->JSopCmp(mVal0, mVal1, OP_lt, expr.primType);
-        }
-        OPCATCHANDGOON(mre_instr_t);
-      }
+    FAST_COMPARE_GOTO(<);
+    CHECKREFERENCEMVALUE(mVal1);
+    CHECKREFERENCEMVALUE(mVal0);
+    bool isEhHappend = false;
+    void *newPc = nullptr;
+    TValue res;
+    try {
+      res = gInterSource->JSopCmp(mVal0, mVal1, OP_lt, expr.primType);
     }
+    OPCATCHANDGOON(mre_instr_t);
+  }
+
+label_OP_nebr:
+  {
+    // Handle statement node: nebr
+    mre_instr_t &expr = *(reinterpret_cast<mre_instr_t *>(func_pc));
+    condgoto_stmt_t &stmt = *(reinterpret_cast<condgoto_stmt_t *>(func_pc));
+    DEBUGOPCODE(nebr, Expr);
+
+    TValue  &mVal1 = MPOP();
+    TValue  &mVal0 = MPOP();
+    FAST_COMPARE_BR(!= , expr.param.type.numOpnds);
+    CHECKREFERENCEMVALUE(mVal1);
+    CHECKREFERENCEMVALUE(mVal0);
+    bool isEhHappend = false;
+    void *newPc = nullptr;
+    TValue res;
+    try {
+      res = gInterSource->JSopCmp(mVal0, mVal1, OP_ne, expr.primType);
+    }
+    OPCATCHANDBR(expr.param.type.numOpnds);
   }
 
 label_OP_ne:
@@ -2101,7 +2091,7 @@ label_OP_ne:
     DEBUGOPCODE(ne, Expr);
     TValue  &mVal1 = MPOP();
     TValue  &mVal0 = MPOP();
-    FAST_COMPARE(!=);
+    FAST_COMPARE_GOTO(!=);
     CHECKREFERENCEMVALUE(mVal1);
     CHECKREFERENCEMVALUE(mVal0);
     bool isEhHappend = false;
@@ -3408,31 +3398,6 @@ label_OP_ireadfpoff: // offset from stack frame
         if (stmt2.op == RE_constval) {
           // fuse OP_constval
           mre_instr_t &stmt3 = *(reinterpret_cast<mre_instr_t *>(func_pc + sizeof(mre_instr_t)));
-          if (stmt3.op == RE_eq) {
-            // fuse OP_eq
-            func_pc += 2 * sizeof(mre_instr_t);
-            v.x.u64 = (v.x.i32 == (int32_t)stmt2.param.constval.i16);
-            condgoto_stmt_t &stmt4 = *(reinterpret_cast<condgoto_stmt_t *>(func_pc));
-            if (stmt4.op == (maple::Opcode)RE_brtrue32) {
-              // fuse OP_brtrue32
-              if(v.x.i32)
-                func_pc = (uint8_t*)&stmt4.offset + stmt4.offset;
-              else
-                func_pc += sizeof(condgoto_stmt_t);
-              goto *(labels[*func_pc]);
-            } else if (stmt4.op == (maple::Opcode)RE_brfalse32) {
-              // fuse OP_brfalse32
-              if(v.x.i32)
-                func_pc += sizeof(condgoto_stmt_t);
-              else
-                func_pc = (uint8_t*)&stmt4.offset + stmt4.offset;
-              goto *(labels[*func_pc]);
-            } else {
-              v.x.u64 |= NAN_BOOLEAN;
-              MPUSH(v);
-              goto *(labels[*func_pc]);
-            }
-          }
           MPUSH(v);
           goto label_OP_constval;
         }

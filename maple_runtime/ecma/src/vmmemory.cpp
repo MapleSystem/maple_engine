@@ -1328,7 +1328,7 @@ void MemoryManager::ManageEnvironment(void *envptr, ManageType flag) {
     }
 #endif
   } else {
-    // Note that SWEEP shouldn't reach an env object
+    // Note that SWEEP shouldn't reach an env object; instead, env is sweeped during COLLECT.
     assert(0);
   }
 
@@ -1340,6 +1340,10 @@ void MemoryManager::ManageEnvironment(void *envptr, ManageType flag) {
 
       if(__is_js_object(val)) {
         ManageChildObj((__jsobject*)true_addr, childFlag);
+      }
+      else if (__is_string(val)) {
+        if (flag == RECALL || flag == COLLECT)
+          GCDecRf(true_addr);
       }
       ptr++;
     }

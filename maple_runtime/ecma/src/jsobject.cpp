@@ -2392,6 +2392,8 @@ TValue __jsobj_getOwnPropertyNames(TValue &this_object, TValue &o) {
   uint32_t n = __jsobj_helper_for_each_property(obj, NULL, NULL);
   __jsobject *arr = __js_new_arr_internal(n);
   __jsobj_helper_for_each_property(obj, __jsobj_walk_getOwnPropertyNames, (void *)arr);
+  if (__is_js_object(o) == false) // obj is newly created
+    memory_manager->RecallMem(obj, sizeof(__jsobject));
   return __object_value(arr);
 }
 
@@ -2476,8 +2478,6 @@ TValue __jsobj_defineProperties(TValue &this_object, TValue &o, TValue &properti
   __jsobj_helper_convert_to_generic(props);
   {
     __jsprop *p = props->prop_list;
-    if (__is_js_object(properties) == false && p== nullptr) // release if props is newly created and prop_list is empty
-      memory_manager->RecallMem((void *)props, sizeof(__jsobject));
     while (p) {
       __jsobj_walk_defineProperties(properties, p, obj);  // may throw exception
       p = p->next;
@@ -2485,6 +2485,8 @@ TValue __jsobj_defineProperties(TValue &this_object, TValue &o, TValue &properti
   }
 
   //GCDecRf(props);
+  if (__is_js_object(properties) == false) // release if props is newly created
+    memory_manager->ManageObject(props, RECALL);
   return o;
 }
 

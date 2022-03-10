@@ -438,7 +438,12 @@ TValue __js_encodeuricomponent(TValue &this_object, TValue *arg_list, uint32_t n
 TValue __js_decodeuri(TValue &this_object, TValue *arg_list, uint32_t nargs) {
   MAPLE_JS_ASSERT(nargs == 1);
   if(__is_string(arg_list[0]) || __is_js_object(arg_list[0])) {
-      return __string_value(__jsop_decode_item(__js_ToString(arg_list[0]),false));
+      //return __string_value(__jsop_decode_item(__js_ToString(arg_list[0]),false));
+      __jsstring* arg0Str = __js_ToString(arg_list[0]);
+      __jsstring* decodeStr = __jsop_decode_item(arg0Str, false);
+      if (__is_string(arg_list[0]) == false)
+        memory_manager->RecallString(arg0Str);
+      return __string_value(decodeStr);
   }
   return *arg_list;
 }
@@ -447,7 +452,12 @@ TValue __js_decodeuri(TValue &this_object, TValue *arg_list, uint32_t nargs) {
 TValue __js_decodeuricomponent(TValue &this_object, TValue *arg_list, uint32_t nargs) {
   MAPLE_JS_ASSERT(nargs == 1);
   if(__is_string(arg_list[0]) || __is_js_object(arg_list[0])) {
-      return __string_value(__jsop_decode_item(__js_ToString(arg_list[0]),true));
+      // return __string_value(__jsop_decode_item(__js_ToString(arg_list[0]),true));
+      __jsstring* arg0Str = __js_ToString(arg_list[0]);
+      __jsstring* decodeStr = __jsop_decode_item(arg0Str, true);
+      if (__is_string(arg_list[0]) == false)
+        memory_manager->RecallString(arg0Str);
+      return __string_value(decodeStr);
   }
   return *arg_list;
 }

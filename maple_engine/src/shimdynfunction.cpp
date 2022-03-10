@@ -1281,8 +1281,12 @@ TValue InterSource::JSopCVT(TValue &mv, PrimType toPtyp, PrimType fromPtyp) {
         return __string_value((__jsstring *)GET_PAYLOAD(mv));
       }
       case PTY_f64 :{
-        assert(toPtyp == PTY_dynf64 && "NYI");
-        return mv;
+        if (toPtyp == PTY_dynstr) {
+          return __string_value(__js_DoubleToString(mv.x.f64));
+        } else {
+          assert(toPtyp == PTY_dynf64 && "NYI");
+          return mv;
+        }
       };
       default:
         MIR_FATAL("interpreteCvt: NYI");
@@ -2044,7 +2048,9 @@ TValue InterSource::FuncCall_JS(__jsobject *fObject, TValue &this_arg, void *env
     // bool isVargs = (nargs > 0) && ((calleeHeader->upFormalSize/8 - 1) != nargs);
     // TValue ret = maple_invoke_dynamic_method(calleeHeader, isVargs ? nullptr : CreateArgumentsObject(mvArgList, nargs));
     TValue fObjMv = (__object_value(fObject));
-    ret = maple_invoke_dynamic_method(calleeHeader,  CreateArgumentsObject(mvArgList, nargs, fObjMv));
+    void* argsObj = CreateArgumentsObject(mvArgList, nargs, fObjMv);
+    ret = maple_invoke_dynamic_method(calleeHeader, argsObj);
+    memory_manager->GCDecRf(argsObj);
     if (GET_PAYLOAD(oldArgs) != 0) {
       __jsop_set_this_prop_by_name(__js_Global_ThisBinding, __jsstr_get_builtin(JSBUILTIN_STRING_ARGUMENTS), oldArgs);
     } else {

@@ -1898,6 +1898,12 @@ label_OP_intrinsicopconstval:
 label_OP_intrinsicopireadfpoff:
 label_OP_getpropbyname:
 label_OP_setpropbyname:
+label_OP_eqbr:
+label_OP_gebr:
+label_OP_gtbr:
+label_OP_lebr:
+label_OP_ltbr:
+label_OP_nebr:
     // Not supported yet: intrinsicopwithtype
     DEBUGOPCODE(fieldsdist, Unused);
     MASSERT(false, "Not supported yet");
