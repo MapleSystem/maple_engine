@@ -278,6 +278,8 @@ TValue __jsop_object_div(TValue &x, TValue &y) {
       } else if (xobj->object_class == JSOBJECT) {
         TValue xjsval = __object_internal_DefaultValue(xobj, JSTYPE_NUMBER);
         if (__is_undefined(xjsval) || __is_string(xjsval)) {
+          if (__is_string(xjsval))
+            memory_manager->RecallString(__jsval_to_string(xjsval));
           return __nan_value();
         } else {
           xval = xjsval.x.i32;
@@ -491,6 +493,8 @@ TValue __jsop_object_rem(TValue &x, TValue &y) {
       } else if (xobj->object_class == JSOBJECT) {
         TValue xjsval = __object_internal_DefaultValue(xobj, JSTYPE_NUMBER);
         if (__is_undefined(xjsval) || __is_string(xjsval)) {
+          if (__is_string(xjsval))
+            memory_manager->RecallString(__jsval_to_string(xjsval));
           return __nan_value();
         } else {
           xval = xjsval.x.i32;

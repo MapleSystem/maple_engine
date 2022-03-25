@@ -525,10 +525,14 @@ TValue __jsstr_indexOf(TValue &this_string, TValue &search, TValue &pos) {
         }
       }
       if (j == slen) {
+        if (__is_string(this_string) == false)
+          memory_manager->RecallString(s);
         return __number_value(k);
       }
     }
   }
+  if (__is_string(this_string) == false)
+    memory_manager->RecallString(s);
   return __number_value(-1);
 }
 
@@ -588,7 +592,13 @@ TValue __jsstr_localeCompare(TValue &this_string, TValue *args, uint32_t nargs) 
     }
     __jsstring *t = __js_ToString(that);
     // step 4:
-    return __number_value(__jsstr_compare(s, t));
+    //return __number_value(__jsstr_compare(s, t));
+    int32_t comp = __jsstr_compare(s, t);
+    if (__is_string(this_string) == false)
+      memory_manager->RecallString(s);
+    if (__is_string(that) == false)
+      memory_manager->RecallString(t);
+    return __number_value(comp);
   }
 
   // Intl spec code.
@@ -1148,8 +1158,10 @@ static int __jsstr_regexp_exec(__jsstring *js_subject, __jsstring *js_pattern,
     }
   }
 
-  if (last_index >=  __jsstr_get_length(js_subject))
+  if (last_index >=  __jsstr_get_length(js_subject)) {
+    RegExpFree(regexp);
     return 0;
+  }
 
   int start_offset = global ? last_index : 0;
   int *offsets = (int *) VMMallocGC((num_captures+2) * 3);

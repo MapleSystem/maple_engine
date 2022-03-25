@@ -1768,7 +1768,11 @@ TValue InterSource::JSopUnaryNeg(TValue &mval) {
     case JSTYPE_OBJECT: {
       __jsobject *obj = __jsval_to_object(mval);
       TValue xval = __object_internal_DefaultValue(obj, JSTYPE_NUMBER);
-      return JSopUnaryNeg(xval);
+      //return JSopUnaryNeg(xval);
+      TValue un = JSopUnaryNeg(xval);
+      if (__is_string(xval))
+        memory_manager->RecallString(__jsval_to_string(xval));
+      return un;
     }
     default:
      MIR_FATAL("InterpreteUnary: NYI");
@@ -1833,7 +1837,6 @@ void* InterSource::CreateArgumentsObject(TValue *mvArgs, uint32_t passedNargs, T
   __jsobj_helper_init_value_property(argumentsObj, JSBUILTIN_STRING_LENGTH, lengthJv, JSPROP_DESC_HAS_VWUEC);
   TValue jsObj = __object_value(argumentsObj);
   __jsop_set_this_prop_by_name(__js_Global_ThisBinding, __jsstr_get_builtin(JSBUILTIN_STRING_ARGUMENTS), jsObj, true);
-  memory_manager->GCIncRf(argumentsObj); // so far argumentsObj is supposed to be refered twice. #1 for global this, #2 for the DynMFunction
   return (void *)argumentsObj;
 }
 
@@ -1994,7 +1997,6 @@ TValue InterSource::FuncCall(void *callee, bool isIntrinsiccall, void *env, TVal
     void* argsObj = CreateArgumentsObject(mvArgs, passedNargs, args[0]);
     ret = maple_invoke_dynamic_method(calleeHeader, argsObj);
     __jsop_set_this_prop_by_name(__js_Global_ThisBinding, __jsstr_get_builtin(JSBUILTIN_STRING_ARGUMENTS), oldArgs, true);
-    memory_manager->GCDecRf(argsObj);
   } else {
     ret = maple_invoke_dynamic_method(calleeHeader, NULL);
   }
@@ -2050,7 +2052,6 @@ TValue InterSource::FuncCall_JS(__jsobject *fObject, TValue &this_arg, void *env
     TValue fObjMv = (__object_value(fObject));
     void* argsObj = CreateArgumentsObject(mvArgList, nargs, fObjMv);
     ret = maple_invoke_dynamic_method(calleeHeader, argsObj);
-    memory_manager->GCDecRf(argsObj);
     if (GET_PAYLOAD(oldArgs) != 0) {
       __jsop_set_this_prop_by_name(__js_Global_ThisBinding, __jsstr_get_builtin(JSBUILTIN_STRING_ARGUMENTS), oldArgs);
     } else {

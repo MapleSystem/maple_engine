@@ -973,6 +973,51 @@ label_OP_regread:
         r = gInterSource->currEH->GetThrownval();
         break;
       }
+      default: {
+        assert( idx > 0 && idx < MAXREGNUM && "NYI");
+        TValue tv = func.regStack[idx];
+        switch (expr.primType) {
+          case PTY_u1: {
+            r = __boolean_value(tv.x.u8 & 1);
+            break;
+          }
+          case PTY_u8: {
+            r.x.u64 = tv.x.u8 | NAN_NUMBER;
+            break;
+          }
+          case PTY_i8: {
+            r.x.i8 = tv.x.i8;
+            r.x.u64 = NAN_NUMBER | r.x.u32;
+            break;
+          }
+          case PTY_u16: {
+            r.x.u64 = tv.x.u16 | NAN_NUMBER;
+            break;
+          }
+          case PTY_u32: {
+            r.x.u64 = tv.x.u32 | NAN_NUMBER;
+            break;
+          }
+          case PTY_i16: {
+            r.x.i16 = tv.x.i16;
+            r.x.u64 = NAN_NUMBER | r.x.u32;
+            break;
+          }
+          case PTY_i32: {
+            r.x.i32 = tv.x.i32;
+            r.x.u64 = NAN_NUMBER | r.x.u32;
+            break;
+          }
+          default: {
+            uint64_t lValue = tv.x.u64;
+            if (lValue == 0) {
+              lValue = NAN_NONE; // NONE value
+            }
+            r.x.u64 = lValue;
+          }
+        }
+        break;
+      }
     }
     MPUSH(r);
     func_pc += sizeof(mre_instr_t);
@@ -2297,7 +2342,44 @@ label_OP_regassign:
       assert(false && "NYI");
       break;
     default:
-      assert(false && "NYI");
+      assert(idx > 0 && "NYI");
+      assert(idx < MAXREGNUM && "regidx over MAX register number");
+      switch(stmt.primType) {
+        case PTY_u1: {
+          uint8_t u8 = res.x.u8;
+          uint8_t oldU8 = func.regStack[idx].x.u8;
+          func.regStack[idx].x.u8 = (oldU8 & 0xfe) | (u8 & 0x1);
+          break;
+        }
+        case PTY_u8: {
+          func.regStack[idx].x.u8 = res.x.u8;
+          break;
+        }
+        case PTY_i8: {
+          func.regStack[idx].x.u16 = res.x.u16;
+          break;
+        }
+        case PTY_i16: {
+          func.regStack[idx].x.i16 = res.x.i16;
+          break;
+        }
+        case PTY_i32: {
+          func.regStack[idx].x.i32 = res.x.i32;
+          break;
+        }
+        case PTY_u16: {
+          func.regStack[idx].x.u16 = res.x.u16;
+          break;
+        }
+        case PTY_u32: {
+          func.regStack[idx].x.u32 = res.x.u32;
+          break;
+        }
+        default: {
+          func.regStack[idx] = res;
+          break;
+        }
+      }
       break;
     }
 

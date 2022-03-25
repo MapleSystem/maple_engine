@@ -44,11 +44,6 @@ static bool __js_argsZero(TValue *arg_list, uint32_t nargs) {
 }
 
 TValue __js_new_date_obj(TValue &this_object, TValue *arg_list, uint32_t nargs) {
-  __jsobject *obj = __create_object();
-  __jsobj_set_prototype(obj, JSBUILTIN_DATEPROTOTYPE);
-  obj->object_class = JSDATE;
-  obj->extensible = true;
-
   double time;
   if (nargs == 0) {
     struct timeval tv;
@@ -108,6 +103,10 @@ TValue __js_new_date_obj(TValue &this_object, TValue *arg_list, uint32_t nargs) 
       time = (double) TimeClip(final_date);
     }
   }
+  __jsobject *obj = __create_object();
+  __jsobj_set_prototype(obj, JSBUILTIN_DATEPROTOTYPE);
+  obj->object_class = JSDATE;
+  obj->extensible = true;
   obj->shared.primDouble = time;
 
   return __object_value(obj);

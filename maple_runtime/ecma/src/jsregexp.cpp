@@ -367,21 +367,6 @@ TValue __jsregexp_Exec(TValue &this_value, TValue &value) {
   if (last_index < 0)
     last_index = 0;
 
-  unsigned num_captures;
-  const char *error_message = NULL;
-
-  // Compile RegExp pattern.
-  dart::jscre::JSRegExp * regexp = RegExpCompile(js_pattern, ignorecase,
-          multiline, &num_captures, &error_message, &RegExpAlloc, &RegExpFree);
-
-  if (regexp == NULL) {
-    if (strstr(error_message, "at end of pattern")) {
-      return __null_value();
-    } else {
-      MAPLE_JS_SYNTAXERROR_EXCEPTION();
-    }
-  }
-
   // Prepare subject.
   __jsstring *js_subject;
   if (__is_js_object(value)) {
@@ -399,19 +384,40 @@ TValue __jsregexp_Exec(TValue &this_value, TValue &value) {
     js_last_index = __number_value(0);
     __jsobj_helper_add_value_property(obj, JSBUILTIN_STRING_LASTINDEX_UL,
                                       js_last_index, JSPROP_DESC_HAS_VWUEUC);
+    if (__is_string(value) == false)
+      memory_manager->RecallString(js_subject);
     return __null_value();
   }
 
+  unsigned num_captures;
+  const char *error_message = NULL;
+
+  // Compile RegExp pattern.
+  dart::jscre::JSRegExp * regexp = RegExpCompile(js_pattern, ignorecase,
+          multiline, &num_captures, &error_message, &RegExpAlloc, &RegExpFree);
+
+  if (regexp == NULL) {
+    if (strstr(error_message, "at end of pattern")) {
+      return __null_value();
+    } else {
+      MAPLE_JS_SYNTAXERROR_EXCEPTION();
+    }
+  }
+
   int start_offset = global ? last_index : 0;
-  int *offsets = (int *) VMMallocGC((num_captures+2) * 3);
+  int *offsets = (int *) VMMallocGC((num_captures+2) * 3 * sizeof(int));
   int offset_count = (num_captures+1) * 3;
 
   // Do RegExp execution.
   int res = RegExpExecute(regexp, js_subject, start_offset, offsets,
                           offset_count);
+  RegExpFree(regexp);
 
   if (res == dart::jscre::JSRegExpErrorNoMatch ||
       res == dart::jscre::JSRegExpErrorHitLimit) {
+    memory_manager->RecallMem(offsets, (num_captures+2) * 3 * sizeof(int));
+    if (__is_string(value) == false)
+      memory_manager->RecallString(js_subject);
     return __null_value();
   }
 
@@ -420,6 +426,7 @@ TValue __jsregexp_Exec(TValue &this_value, TValue &value) {
   for (int i = 0; i < res; i++) {
     vres.push_back(std::make_pair(offsets[2 * i], offsets[2 * i + 1]));
   }
+  memory_manager->RecallMem(offsets, (num_captures+2) * 3 * sizeof(int));
 
   // Prepare for return object.
   int length = num_captures + 1;  // ES5 15.10.6.2 step. 17
@@ -456,6 +463,8 @@ TValue __jsregexp_Exec(TValue &this_value, TValue &value) {
   js_last_index = __number_value(vres[0].second);
   __jsobj_helper_add_value_property(obj, JSBUILTIN_STRING_LASTINDEX_UL,
                                     js_last_index, JSPROP_DESC_HAS_VWUEUC);
+  if (__is_string(value) == false)
+    memory_manager->RecallString(js_subject);
   return __object_value(array_obj);
 }
 

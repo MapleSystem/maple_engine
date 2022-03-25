@@ -2414,7 +2414,12 @@ TValue __jsobj_create(TValue &this_object, TValue &o, TValue &properties) {
   }
   // ecma 15.2.3.5 step 4.
   if (/*properties &&*/!__is_undefined(properties)) {
-    __jsobj_defineProperties(this_object, object, properties);
+    try {
+      __jsobj_defineProperties(this_object, object, properties);
+    } catch (const char* estr) {
+      memory_manager->ManageObject(obj, RECALL);
+      throw estr;
+    }
   }
   // ecma 15.2.3.5 step 5.
   return object;
@@ -2677,7 +2682,7 @@ TValue __jsobj_keys(TValue &this_object, TValue &o) {
   __jsobj_helper_for_each_property(obj, __jsobj_walk_keys, (void *)arr, __jsobj_walk_keys_condition);
   // ecma 15.2.3.14 step 6.
   if (__is_js_object(o) == false) // obj is newly created
-    memory_manager->RecallMem((void *)obj, sizeof(__jsobject));
+    memory_manager->ManageObject(obj, RECALL); // obj may have properties, so use ManageObject instead of RecallMem
   return __object_value(arr);
 }
 

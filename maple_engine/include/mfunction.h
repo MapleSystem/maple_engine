@@ -126,6 +126,7 @@ namespace maple {
 #define FUNCATTRSTRICT 0x10
 // FuncAttrJSArgument = 1 << 5
 #define FUNCATTRARGUMENT 0x20
+#define MAXREGNUM 0x60
 
     class DynMFunction {
       public:
@@ -140,6 +141,7 @@ namespace maple {
           uint64_t                      sp;            // evaluation stack pointer
           TValue                       *operand_stack; // for locals, return value, throw value and evaluation stack
           uint8_t                      *lib_addr;
+          TValue                        regStack[MAXREGNUM];
 
      public:
       bool is_strict() { // function is strict
