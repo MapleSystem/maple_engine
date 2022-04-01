@@ -130,6 +130,11 @@
 
   "$MAPLE_BUILD_TOOLS"/run-app.sh -classpath ./HelloWorld.so HelloWorld
 ```
+## Build and run a C app
+```
+  cd ./maple_build/examples/HelloWorld-C
+  "$MAPLE_BUILD_TOOLS"/run-c-app.sh HelloWorld-C.c
+```
 
 ## Debug an app with Maple debugger
 ```

@@ -145,6 +145,7 @@ void collect_stack_refs(void* bp, std::set<void*>& refs);
 
 extern "C" void MCC_DecRef_NaiveRCFast(void* obj);
 extern "C" void MCC_IncRef_NaiveRCFast(void* obj);
+extern bool __run_CApp;
 
 MValue maple_invoke_method(const method_header_t* const mir_header, const MFunction *caller) {
     // Array of labels for threaded interpretion
@@ -171,10 +172,10 @@ MValue maple_invoke_method(const method_header_t* const mir_header, const MFunct
 
     MStack::size_type const caller_args = caller->sp - mir_header->formals_num;
     DEBUGARGS();
-
-    MRT_YieldpointHandler_x86_64();
-    MRT_SaveContext_x86_64(&func);
-
+    if (!__run_CApp) {
+      MRT_YieldpointHandler_x86_64();
+      MRT_SaveContext_x86_64(&func);
+    }
     // Get the first mir instruction of this method
     goto *(labels[((base_node_t *)func.pc)->op]);
 
@@ -1061,7 +1062,9 @@ label_OP_brtrue32:
 
 label_OP_return:
   {
-    MRT_ExitContext_x86_64();
+    if (!__run_CApp) {
+      MRT_ExitContext_x86_64();
+    }
     // Handle statement node: return
     DEBUGOPCODE(return, Stmt);
 
@@ -1262,7 +1265,9 @@ label_exception_handler:
 
     func.sp = 1;
     DEBUGOPCODE(: THROW EXCEPTION, Throw);
-    MRT_ExitContext_x86_64();
+    if (!__run_CApp) {
+      MRT_ExitContext_x86_64();
+    }
     // No matched exception type
     throw thrownval;
   }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) [2020-2021] Futurewei Technologies, Inc. All rights reserved.
+ * Copyright (C) [2020-2022] Futurewei Technologies, Inc. All rights reserved.
  *
  * OpenArkCompiler is licensed underthe Mulan Permissive Software License v2.
  * You can use this software according to the terms and conditions of the MulanPSL - 2.0.
@@ -13,9 +13,10 @@
  * See the MulanPSL - 2.0 for more details.
  */
 
-#include <cstdint>
+#include <stdio.h>
 
-extern "C" int64_t __engine_shim(int64_t, ...);
-extern "C" int64_t EngineShimDynamic(int64_t, char *);
-extern "C" void __set_CApp(void);
-
+int main()
+{
+  printf("Hello\n");
+  return 0;
+}

@@ -1008,6 +1008,10 @@ label_OP_regread:
             r.x.u64 = NAN_NUMBER | r.x.u32;
             break;
           }
+          case PTY_f64: {
+            r.x.f64 = tv.x.f64;
+            break;
+          }
           default: {
             uint64_t lValue = tv.x.u64;
             if (lValue == 0) {

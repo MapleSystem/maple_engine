@@ -124,4 +124,9 @@ extern "C" int64_t __engine_shim(int64_t first_arg, ...) {
     return val.x.i64;
 }
 
+bool __run_CApp = false;
+extern "C" void __set_CApp(void) {
+    __run_CApp = true;
+}
+
 } // namespace maple
